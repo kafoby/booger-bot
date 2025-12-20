@@ -142,6 +142,24 @@ async def on_message(message):
             await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error fetching warns: {e}", "error")
     
+    # Say command: $say text
+    if message.content.startswith('$say '):
+        try:
+            text_to_say = message.content[5:].strip()
+            if not text_to_say:
+                await message.channel.send('Usage: $say <text>')
+                return
+            
+            # Delete the command message
+            await message.delete()
+            
+            # Send the message
+            await message.channel.send(text_to_say)
+            await log_to_server(f"Bot said: {text_to_say} (via $say command)", "info")
+        except Exception as e:
+            print(f"Error with $say command: {e}")
+            await log_to_server(f"Error with $say command: {e}", "error")
+    
     # Timeout command: $timeout @user 10m
     if message.content.startswith('$timeout'):
         try:
