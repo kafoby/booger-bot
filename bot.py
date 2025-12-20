@@ -33,6 +33,12 @@ async def on_ready():
     msg = f'{client.user} has connected to Discord!'
     print(msg)
     await log_to_server(msg, "info")
+    
+    # Send "hi" to the specified channel
+    channel = client.get_channel(971303412849332226)
+    if channel:
+        await channel.send('hi')
+        await log_to_server(f"Sent 'hi' to channel {channel}", "info")
 
 @client.event
 async def on_message(message):
