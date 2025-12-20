@@ -88,6 +88,15 @@ async def on_message(message):
         except Exception as e:
             print(f"Error fetching cat gif: {e}")
             await log_to_server(f"Error fetching cat gif: {e}", "error")
+    
+    # Send gif when someone says the specific word
+    if 'faggot' in message.content.lower():
+        try:
+            await message.channel.send('https://cdn.discordapp.com/attachments/1279123313519624212/1316546100617805904/attachment-3.gif')
+            await log_to_server(f"Sent gif to {message.channel} in response to message: {message.content}", "info")
+        except Exception as e:
+            print(f"Error sending gif: {e}")
+            await log_to_server(f"Error sending gif: {e}", "error")
 
 if __name__ == "__main__":
     if not TOKEN:
