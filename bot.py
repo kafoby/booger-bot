@@ -68,7 +68,7 @@ async def on_message(message):
         await log_to_server(f"Responded to $hello command in {message.channel}", "info")
     
     # Warn command: $warn @user reason
-    if message.content.startswith('$warn'):
+    if message.content.startswith('$warn '):
         try:
             parts = message.content.split(maxsplit=2)
             if len(parts) < 3:
@@ -100,6 +100,47 @@ async def on_message(message):
             print(f"Error warning user: {e}")
             await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error warning user: {e}", "error")
+    
+    # View warns command: $warns or $warns @user
+    if message.content.startswith('$warns'):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(WARNS_URL) as response:
+                    if response.status == 200:
+                        warns = await response.json()
+                        
+                        # Filter by user if mentioned
+                        if message.mentions:
+                            target_user = message.mentions[0]
+                            warns = [w for w in warns if w['userId'] == str(target_user.id)]
+                            if not warns:
+                                await message.channel.send(f'No warns found for {target_user.mention}')
+                                return
+                            title = f'Warns for {target_user.name}'
+                        else:
+                            if not warns:
+                                await message.channel.send('No warns recorded')
+                                return
+                            title = 'All Warns'
+                        
+                        # Create embed
+                        embed = discord.Embed(title=title, color=discord.Color.orange())
+                        
+                        for warn in warns:
+                            embed.add_field(
+                                name=f"{warn['userName']} (ID: {warn['userId']})",
+                                value=f"**Reason:** {warn['reason']}\n**Date:** {warn['timestamp'][:10]}",
+                                inline=False
+                            )
+                        
+                        await message.channel.send(embed=embed)
+                        await log_to_server(f"Viewed warns in {message.channel}", "info")
+                    else:
+                        await message.channel.send('Error: Could not fetch warns')
+        except Exception as e:
+            print(f"Error fetching warns: {e}")
+            await message.channel.send(f'Error: {str(e)}')
+            await log_to_server(f"Error fetching warns: {e}", "error")
     
     # Timeout command: $timeout @user 10m
     if message.content.startswith('$timeout'):
