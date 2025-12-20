@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
+import { insertWarnSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -18,6 +19,27 @@ export async function registerRoutes(
       const input = api.logs.create.input.parse(req.body);
       const log = await storage.createLog(input);
       res.status(201).json(log);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.get("/api/warns", async (req, res) => {
+    const warns = await storage.getWarns();
+    res.json(warns);
+  });
+
+  app.post("/api/warns", async (req, res) => {
+    try {
+      const input = insertWarnSchema.parse(req.body);
+      const warn = await storage.createWarn(input);
+      res.status(201).json(warn);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({

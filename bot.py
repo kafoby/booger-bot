@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 # Get token from environment variables
 TOKEN = os.getenv('DISCORD_TOKEN')
 API_URL = 'http://0.0.0.0:5000/api/logs'
+WARNS_URL = 'http://0.0.0.0:5000/api/warns'
 
 print(f"Token available: {bool(TOKEN)}")
 print(f"Token value (first 20 chars): {TOKEN[:20] if TOKEN else 'None'}")
@@ -65,6 +66,40 @@ async def on_message(message):
     if message.content.startswith('$hello'):
         await message.channel.send('Hello!')
         await log_to_server(f"Responded to $hello command in {message.channel}", "info")
+    
+    # Warn command: $warn @user reason
+    if message.content.startswith('$warn'):
+        try:
+            parts = message.content.split(maxsplit=2)
+            if len(parts) < 3:
+                await message.channel.send('Usage: $warn @user <reason>\nExample: $warn @user spamming')
+                return
+            
+            # Get mentioned user
+            if not message.mentions:
+                await message.channel.send('Please mention a user to warn')
+                return
+            
+            target_user = message.mentions[0]
+            reason = parts[2]
+            
+            # Send warn to database via API
+            async with aiohttp.ClientSession() as session:
+                payload = {
+                    "userId": str(target_user.id),
+                    "userName": target_user.name,
+                    "reason": reason
+                }
+                async with session.post(WARNS_URL, json=payload) as response:
+                    if response.status == 201:
+                        await message.channel.send(f'{target_user.mention} has been warned for: {reason}')
+                        await log_to_server(f"Warned {target_user} for: {reason}", "info")
+                    else:
+                        await message.channel.send('Error: Failed to save warning')
+        except Exception as e:
+            print(f"Error warning user: {e}")
+            await message.channel.send(f'Error: {str(e)}')
+            await log_to_server(f"Error warning user: {e}", "error")
     
     # Timeout command: $timeout @user 10m
     if message.content.startswith('$timeout'):
