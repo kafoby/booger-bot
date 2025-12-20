@@ -8,11 +8,16 @@ from datetime import datetime
 TOKEN = os.getenv('DISCORD_TOKEN')
 API_URL = 'http://0.0.0.0:5000/api/logs'
 
+print(f"Token available: {bool(TOKEN)}")
+print(f"Token value (first 20 chars): {TOKEN[:20] if TOKEN else 'None'}")
+
 # Set up intents
 intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
+
+print("Discord bot initialized")
 
 async def log_to_server(message, level="info"):
     """Send log to the web server API"""
@@ -36,9 +41,17 @@ async def on_ready():
     
     # Send "hi" to the specified channel
     channel = client.get_channel(971303412849332226)
+    print(f"Channel object: {channel}")
     if channel:
-        await channel.send('hi')
-        await log_to_server(f"Sent 'hi' to channel {channel}", "info")
+        try:
+            await channel.send('hi')
+            print("Message sent successfully!")
+            await log_to_server(f"Sent 'hi' to channel {channel}", "info")
+        except Exception as e:
+            print(f"Error sending message: {e}")
+            await log_to_server(f"Error sending message: {e}", "error")
+    else:
+        print("Channel not found!")
 
 @client.event
 async def on_message(message):
