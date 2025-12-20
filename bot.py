@@ -2,7 +2,7 @@ import discord
 import os
 import aiohttp
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Get token from environment variables
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -65,6 +65,45 @@ async def on_message(message):
     if message.content.startswith('$hello'):
         await message.channel.send('Hello!')
         await log_to_server(f"Responded to $hello command in {message.channel}", "info")
+    
+    # Timeout command: $timeout @user 10m
+    if message.content.startswith('$timeout'):
+        try:
+            parts = message.content.split()
+            if len(parts) < 3:
+                await message.channel.send('Usage: $timeout @user <duration>\nExample: $timeout @user 10m')
+                return
+            
+            # Get mentioned user
+            if not message.mentions:
+                await message.channel.send('Please mention a user to timeout')
+                return
+            
+            target_user = message.mentions[0]
+            duration_str = parts[2]
+            
+            # Parse duration (supports m for minutes, s for seconds, h for hours)
+            duration_value = int(''.join(c for c in duration_str if c.isdigit()))
+            duration_unit = ''.join(c for c in duration_str if c.isalpha()).lower()
+            
+            if duration_unit == 'm':
+                timeout_duration = timedelta(minutes=duration_value)
+            elif duration_unit == 's':
+                timeout_duration = timedelta(seconds=duration_value)
+            elif duration_unit == 'h':
+                timeout_duration = timedelta(hours=duration_value)
+            else:
+                await message.channel.send('Invalid duration. Use format: 10m, 30s, or 1h')
+                return
+            
+            # Apply timeout
+            await target_user.timeout(timeout_duration, reason="Timed out by bot command")
+            await message.channel.send(f'{target_user.mention} has been timed out for {duration_str}')
+            await log_to_server(f"Timed out {target_user} for {duration_str}", "info")
+        except Exception as e:
+            print(f"Error timing out user: {e}")
+            await message.channel.send(f'Error: {str(e)}')
+            await log_to_server(f"Error timing out user: {e}", "error")
     
     # Send cat gif when someone says "cat"
     if 'cat' in message.content.lower():
