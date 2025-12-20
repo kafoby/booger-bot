@@ -4,6 +4,7 @@ import { LogCard } from "@/components/LogCard";
 import { StatsCard } from "@/components/StatsCard";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { 
   Terminal, 

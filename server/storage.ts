@@ -1,6 +1,5 @@
 import { db } from "./db";
 import { logs, type InsertLog, type Log } from "@shared/schema";
-import { desc } from "drizzle-orm";
 
 export interface IStorage {
   getLogs(): Promise<Log[]>;
@@ -9,12 +8,12 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   async getLogs(): Promise<Log[]> {
-    return await db.select().from(logs).orderBy(desc(logs.timestamp));
+    return await db.select().from(logs).orderBy(logs.id);
   }
 
   async createLog(insertLog: InsertLog): Promise<Log> {
-    const [log] = await db.insert(logs).values(insertLog).returning();
-    return log;
+    const [created] = await db.insert(logs).values(insertLog).returning();
+    return created;
   }
 }
 
