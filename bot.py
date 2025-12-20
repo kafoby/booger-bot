@@ -47,6 +47,11 @@ async def on_message(message):
         await message.channel.send('Hello!')
         await log_to_server(f"Responded to $hello command in {message.channel}", "info")
     
+    # Respond with "hi" when someone says "hi"
+    if 'hi' in message.content.lower():
+        await message.channel.send('Hi there!')
+        await log_to_server(f"Responded to 'hi' in {message.channel}", "info")
+    
     # Send cat gif when someone says "cat"
     if 'cat' in message.content.lower():
         try:
