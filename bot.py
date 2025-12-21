@@ -413,9 +413,9 @@ async def on_message(message):
                         else:
                             embed.set_author(name=f"Now playing - {target_user.display_name}")
                         
-                        # Use album cover as main image on the right
+                        # Use album cover as small thumbnail on top right
                         if cover_url:
-                            embed.set_image(url=cover_url)
+                            embed.set_thumbnail(url=cover_url)
                         
                         msg = await message.channel.send(embed=embed)
                         
