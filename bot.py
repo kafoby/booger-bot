@@ -396,16 +396,25 @@ async def on_message(message):
                                             profile_pic = img['#text']
                                             break
                         
-                        # Create embed
+                        # Get album name from track
+                        album_name = "Unknown"
+                        if 'album' in track:
+                            album_name = track['album']['#text'] if isinstance(track['album'], dict) else track['album']
+                        
+                        # Create embed with Discord user info
                         embed = discord.Embed(
-                            title=f"Now Playing - {lfm_username}",
-                            description=f"**{track_name}**\nby {artist_name}\n\nTotal Scrobbles: {scrobbles}",
+                            title=f"Now playing - {target_user.display_name}",
+                            description=f"**{track_name}**\n{artist_name} • {album_name}\n\n{scrobbles} total scrobbles • GlobalWhoKnows track #unknown",
                             color=discord.Color.from_rgb(220, 20, 60)
                         )
+                        
+                        # Use Discord user's avatar as thumbnail
+                        if target_user.avatar:
+                            embed.set_thumbnail(url=target_user.avatar.url)
+                        
+                        # Use album cover as main image
                         if cover_url:
                             embed.set_image(url=cover_url)
-                        if profile_pic:
-                            embed.set_thumbnail(url=profile_pic)
                         
                         msg = await message.channel.send(embed=embed)
                         
