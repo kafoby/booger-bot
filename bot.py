@@ -2,6 +2,7 @@ import discord
 import os
 import aiohttp
 import asyncio
+import random
 from datetime import datetime, timedelta
 
 # Get token from environment variables
@@ -198,6 +199,33 @@ async def on_message(message):
         except Exception as e:
             print(f"Error fetching dog image: {e}")
             await log_to_server(f"Error fetching dog image: {e}", "error")
+    
+    # Gay command: ,gay @user
+    if message.content.startswith(',gay '):
+        try:
+            if not message.mentions:
+                await message.channel.send('Please mention a user')
+                return
+            
+            target_user = message.mentions[0]
+            gay_percentage = random.randint(0, 100)
+            
+            # Create embed with user info
+            embed = discord.Embed(
+                title=f"{target_user.name} Gay Meter",
+                description=f"{gay_percentage}% gay",
+                color=discord.Color.from_rgb(255, 20, 147)
+            )
+            
+            # Add user's profile picture
+            if target_user.avatar:
+                embed.set_thumbnail(url=target_user.avatar.url)
+            
+            await message.channel.send(embed=embed)
+            await log_to_server(f"Sent gay meter for {target_user} ({gay_percentage}%) via ,gay command", "info")
+        except Exception as e:
+            print(f"Error with ,gay command: {e}")
+            await log_to_server(f"Error with ,gay command: {e}", "error")
     
     # Say2 command: ,say2 @user <message> (silent - sends DM without announcing in chat)
     if message.content.startswith(',say2 '):
