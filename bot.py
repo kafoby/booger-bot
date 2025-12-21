@@ -146,8 +146,15 @@ async def on_message(message):
                 await message.channel.send('Usage: ,say <text>')
                 return
             
+            # Remove channel mentions and user mentions from the text
+            text_to_say = text_to_say.replace('<#', '').replace('>', '')
+            text_to_say = text_to_say.replace('<@', '').replace('!', '').replace('>', '')
+            
             # Delete the command message
-            await message.delete()
+            try:
+                await message.delete()
+            except:
+                pass
             
             # Send the message
             await message.channel.send(text_to_say)
@@ -184,7 +191,7 @@ async def on_message(message):
                         data = await response.json()
                         if data['status'] == 'success':
                             dog_url = data['message']
-                            embed = discord.Embed(title="Here's a dog for you!", color=discord.Color.brown())
+                            embed = discord.Embed(title="Here's a dog for you!", color=discord.Color.orange())
                             embed.set_image(url=dog_url)
                             await message.channel.send(embed=embed)
                             await log_to_server(f"Sent dog image to {message.channel} via ,dog command", "info")
