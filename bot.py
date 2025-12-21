@@ -199,7 +199,7 @@ async def on_message(message):
             print(f"Error fetching dog image: {e}")
             await log_to_server(f"Error fetching dog image: {e}", "error")
     
-    # Say2 command: ,say2 @user <message>
+    # Say2 command: ,say2 @user <message> (silent - sends DM without announcing in chat)
     if message.content.startswith(',say2 '):
         try:
             parts = message.content.split(maxsplit=2)
@@ -215,17 +215,20 @@ async def on_message(message):
             target_user = message.mentions[0]
             text_to_send = parts[2]
             
-            # Send DM to user
+            # Delete the command message
+            try:
+                await message.delete()
+            except:
+                pass
+            
+            # Send DM to user silently (no announcement in chat)
             try:
                 await target_user.send(text_to_send)
-                await message.channel.send(f'Sent DM to {target_user.mention}')
                 await log_to_server(f"Sent DM to {target_user}: {text_to_send}", "info")
             except discord.Forbidden:
-                await message.channel.send(f'Cannot send DM to {target_user.mention} - they may have DMs disabled')
                 await log_to_server(f"Failed to send DM to {target_user} - DMs disabled", "error")
         except Exception as e:
             print(f"Error with ,say2 command: {e}")
-            await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error with ,say2 command: {e}", "error")
     
     # Timeout command: ,timeout @user 10m
