@@ -174,6 +174,53 @@ async def on_message(message):
             print(f"Error fetching cat gif: {e}")
             await log_to_server(f"Error fetching cat gif: {e}", "error")
     
+    # Dog command: ,dog
+    if message.content.startswith(',dog'):
+        try:
+            # Use Dog API to get a random dog gif
+            async with aiohttp.ClientSession() as session:
+                async with session.get('https://dog.ceo/api/breeds/image/random') as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data['status'] == 'success':
+                            dog_url = data['message']
+                            embed = discord.Embed(title="Here's a dog for you!", color=discord.Color.brown())
+                            embed.set_image(url=dog_url)
+                            await message.channel.send(embed=embed)
+                            await log_to_server(f"Sent dog image to {message.channel} via ,dog command", "info")
+        except Exception as e:
+            print(f"Error fetching dog image: {e}")
+            await log_to_server(f"Error fetching dog image: {e}", "error")
+    
+    # Say2 command: ,say2 @user <message>
+    if message.content.startswith(',say2 '):
+        try:
+            parts = message.content.split(maxsplit=2)
+            if len(parts) < 3:
+                await message.channel.send('Usage: ,say2 @user <message>')
+                return
+            
+            # Get mentioned user
+            if not message.mentions:
+                await message.channel.send('Please mention a user to send a DM to')
+                return
+            
+            target_user = message.mentions[0]
+            text_to_send = parts[2]
+            
+            # Send DM to user
+            try:
+                await target_user.send(text_to_send)
+                await message.channel.send(f'Sent DM to {target_user.mention}')
+                await log_to_server(f"Sent DM to {target_user}: {text_to_send}", "info")
+            except discord.Forbidden:
+                await message.channel.send(f'Cannot send DM to {target_user.mention} - they may have DMs disabled')
+                await log_to_server(f"Failed to send DM to {target_user} - DMs disabled", "error")
+        except Exception as e:
+            print(f"Error with ,say2 command: {e}")
+            await message.channel.send(f'Error: {str(e)}')
+            await log_to_server(f"Error with ,say2 command: {e}", "error")
+    
     # Timeout command: ,timeout @user 10m
     if message.content.startswith(',timeout'):
         try:
