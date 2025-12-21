@@ -63,10 +63,6 @@ async def on_message(message):
     print(msg)
     await log_to_server(msg, "info")
 
-    if message.content.startswith('$hello'):
-        await message.channel.send('Hello!')
-        await log_to_server(f"Responded to $hello command in {message.channel}", "info")
-    
     # Warn command: $warn @user reason
     if message.content.startswith('$warn '):
         try:
