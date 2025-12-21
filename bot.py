@@ -403,16 +403,17 @@ async def on_message(message):
                         
                         # Create embed with Discord user info
                         embed = discord.Embed(
-                            title=f"Now playing - {target_user.display_name}",
-                            description=f"**{track_name}**\n{artist_name} • {album_name}\n\n{scrobbles} total scrobbles • GlobalWhoKnows track #unknown",
+                            description=f"**{track_name}**\n{artist_name} • {album_name}\n\n{scrobbles} total scrobbles",
                             color=discord.Color.from_rgb(220, 20, 60)
                         )
                         
-                        # Use Discord user's avatar as thumbnail
+                        # Set author with profile picture on the left
                         if target_user.avatar:
-                            embed.set_thumbnail(url=target_user.avatar.url)
+                            embed.set_author(name=f"Now playing - {target_user.display_name}", icon_url=target_user.avatar.url)
+                        else:
+                            embed.set_author(name=f"Now playing - {target_user.display_name}")
                         
-                        # Use album cover as main image
+                        # Use album cover as main image on the right
                         if cover_url:
                             embed.set_image(url=cover_url)
                         
