@@ -63,12 +63,12 @@ async def on_message(message):
     print(msg)
     await log_to_server(msg, "info")
 
-    # Warn command: $warn @user reason
-    if message.content.startswith('$warn '):
+    # Warn command: ,warn @user reason
+    if message.content.startswith(',warn '):
         try:
             parts = message.content.split(maxsplit=2)
             if len(parts) < 3:
-                await message.channel.send('Usage: $warn @user <reason>\nExample: $warn @user spamming')
+                await message.channel.send('Usage: ,warn @user <reason>\nExample: ,warn @user spamming')
                 return
             
             # Get mentioned user
@@ -97,8 +97,8 @@ async def on_message(message):
             await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error warning user: {e}", "error")
     
-    # View warns command: $warns or $warns @user
-    if message.content.startswith('$warns'):
+    # View warns command: ,warns or ,warns @user
+    if message.content.startswith(',warns'):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(WARNS_URL) as response:
@@ -138,12 +138,12 @@ async def on_message(message):
             await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error fetching warns: {e}", "error")
     
-    # Say command: $say text
-    if message.content.startswith('$say '):
+    # Say command: ,say text
+    if message.content.startswith(',say '):
         try:
             text_to_say = message.content[5:].strip()
             if not text_to_say:
-                await message.channel.send('Usage: $say <text>')
+                await message.channel.send('Usage: ,say <text>')
                 return
             
             # Delete the command message
@@ -151,17 +151,35 @@ async def on_message(message):
             
             # Send the message
             await message.channel.send(text_to_say)
-            await log_to_server(f"Bot said: {text_to_say} (via $say command)", "info")
+            await log_to_server(f"Bot said: {text_to_say} (via ,say command)", "info")
         except Exception as e:
-            print(f"Error with $say command: {e}")
-            await log_to_server(f"Error with $say command: {e}", "error")
+            print(f"Error with ,say command: {e}")
+            await log_to_server(f"Error with ,say command: {e}", "error")
     
-    # Timeout command: $timeout @user 10m
-    if message.content.startswith('$timeout'):
+    # Cat command: ,cat
+    if message.content.startswith(',cat'):
+        try:
+            # Use The Cat API to get a random cat gif
+            async with aiohttp.ClientSession() as session:
+                async with session.get('https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1') as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data and len(data) > 0:
+                            cat_url = data[0]['url']
+                            embed = discord.Embed(title="Here's a cat for you!", color=discord.Color.purple())
+                            embed.set_image(url=cat_url)
+                            await message.channel.send(embed=embed)
+                            await log_to_server(f"Sent cat gif to {message.channel} via ,cat command", "info")
+        except Exception as e:
+            print(f"Error fetching cat gif: {e}")
+            await log_to_server(f"Error fetching cat gif: {e}", "error")
+    
+    # Timeout command: ,timeout @user 10m
+    if message.content.startswith(',timeout'):
         try:
             parts = message.content.split()
             if len(parts) < 3:
-                await message.channel.send('Usage: $timeout @user <duration>\nExample: $timeout @user 10m')
+                await message.channel.send('Usage: ,timeout @user <duration>\nExample: ,timeout @user 10m (or 30s, 1h)')
                 return
             
             # Get mentioned user
@@ -194,24 +212,6 @@ async def on_message(message):
             print(f"Error timing out user: {e}")
             await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error timing out user: {e}", "error")
-    
-    # Send cat gif when someone says "cat"
-    if 'cat' in message.content.lower():
-        try:
-            # Use The Cat API to get a random cat gif
-            async with aiohttp.ClientSession() as session:
-                async with session.get('https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1') as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data and len(data) > 0:
-                            cat_url = data[0]['url']
-                            embed = discord.Embed(title="Here's a cat for you!", color=discord.Color.purple())
-                            embed.set_image(url=cat_url)
-                            await message.channel.send(embed=embed)
-                            await log_to_server(f"Sent cat gif to {message.channel} in response to message: {message.content}", "info")
-        except Exception as e:
-            print(f"Error fetching cat gif: {e}")
-            await log_to_server(f"Error fetching cat gif: {e}", "error")
     
     # Send gif when someone says the specific word
     if 'faggot' in message.content.lower():
