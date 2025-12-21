@@ -3,6 +3,7 @@ import os
 import aiohttp
 import asyncio
 import random
+import urllib.parse
 from datetime import datetime, timedelta
 
 # Get token from environment variables
@@ -401,9 +402,12 @@ async def on_message(message):
                         if 'album' in track:
                             album_name = track['album']['#text'] if isinstance(track['album'], dict) else track['album']
                         
+                        # Create Last.fm track URL
+                        track_url = f"https://www.last.fm/music/{urllib.parse.quote(artist_name)}/+{urllib.parse.quote(track_name)}"
+                        
                         # Create embed with Discord user info
                         embed = discord.Embed(
-                            description=f"**{track_name}**\n{artist_name} • {album_name}\n\n{scrobbles} total scrobbles",
+                            description=f"[**{track_name}**]({track_url})\n{artist_name} • {album_name}\n\n{scrobbles} total scrobbles",
                             color=discord.Color.from_rgb(220, 20, 60)
                         )
                         
