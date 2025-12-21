@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
-import { insertWarnSchema } from "@shared/schema";
+import { insertWarnSchema, insertLfmSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -40,6 +40,34 @@ export async function registerRoutes(
       const input = insertWarnSchema.parse(req.body);
       const warn = await storage.createWarn(input);
       res.status(201).json(warn);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.get("/api/lfm/:discordUserId", async (req, res) => {
+    try {
+      const connection = await storage.getLfmConnection(req.params.discordUserId);
+      if (!connection) {
+        return res.status(404).json({ message: "Last.fm connection not found" });
+      }
+      res.json(connection);
+    } catch (err) {
+      res.status(500).json({ message: "Error fetching Last.fm connection" });
+    }
+  });
+
+  app.post("/api/lfm", async (req, res) => {
+    try {
+      const input = insertLfmSchema.parse(req.body);
+      const connection = await storage.createOrUpdateLfmConnection(input);
+      res.status(201).json(connection);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({

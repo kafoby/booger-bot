@@ -7,8 +7,10 @@ from datetime import datetime, timedelta
 
 # Get token from environment variables
 TOKEN = os.getenv('DISCORD_TOKEN')
+LASTFM_API_KEY = os.getenv('LASTFM_API_KEY')
 API_URL = 'http://0.0.0.0:5000/api/logs'
 WARNS_URL = 'http://0.0.0.0:5000/api/warns'
+LFM_URL = 'http://0.0.0.0:5000/api/lfm'
 
 print(f"Token available: {bool(TOKEN)}")
 print(f"Token value (first 20 chars): {TOKEN[:20] if TOKEN else 'None'}")
@@ -297,6 +299,128 @@ async def on_message(message):
             print(f"Error timing out user: {e}")
             await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error timing out user: {e}", "error")
+    
+    # Last.fm set command: ,fmset lastfmusername
+    if message.content.startswith(',fmset '):
+        try:
+            lfm_username = message.content[7:].strip()
+            if not lfm_username:
+                await message.channel.send('Usage: ,fmset <lastfm_username>')
+                return
+            
+            # Store in database via API
+            async with aiohttp.ClientSession() as session:
+                payload = {
+                    "discordUserId": str(message.author.id),
+                    "lastfmUsername": lfm_username
+                }
+                async with session.post(LFM_URL, json=payload) as response:
+                    if response.status in [200, 201]:
+                        await message.channel.send(f'Last.fm account set to `{lfm_username}`')
+                        await log_to_server(f"Set Last.fm account for {message.author} to {lfm_username}", "info")
+                    else:
+                        await message.channel.send('Error setting Last.fm account')
+        except Exception as e:
+            print(f"Error with ,fmset command: {e}")
+            await log_to_server(f"Error with ,fmset command: {e}", "error")
+    
+    # Last.fm command: ,fm or ,fm @user
+    if message.content.startswith(',fm'):
+        try:
+            if not LASTFM_API_KEY:
+                await message.channel.send('Last.fm API key not configured')
+                return
+            
+            # Get target user
+            target_user = message.mentions[0] if message.mentions else message.author
+            
+            # Get Last.fm username from database
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f'{LFM_URL}/{target_user.id}') as response:
+                    if response.status != 200:
+                        await message.channel.send(f'{target_user.mention} has not set their Last.fm account. Use `,fmset <username>`')
+                        return
+                    
+                    connection = await response.json()
+                    lfm_username = connection['lastfmUsername']
+                
+                # Fetch now playing from Last.fm API
+                lfm_params = {
+                    'method': 'user.getRecentTracks',
+                    'user': lfm_username,
+                    'api_key': LASTFM_API_KEY,
+                    'format': 'json',
+                    'limit': '1'
+                }
+                async with session.get('https://ws.audioscrobbler.com/2.0/', params=lfm_params) as lfm_response:
+                    if lfm_response.status != 200:
+                        await message.channel.send('Error fetching Last.fm data')
+                        return
+                    
+                    lfm_data = await lfm_response.json()
+                    
+                    if 'recenttracks' not in lfm_data or not lfm_data['recenttracks']['track']:
+                        await message.channel.send(f'{target_user.mention} has no recent tracks')
+                        return
+                    
+                    track = lfm_data['recenttracks']['track']
+                    if isinstance(track, list):
+                        track = track[0]
+                    
+                    track_name = track.get('name', 'Unknown')
+                    artist_name = track['artist']['#text'] if isinstance(track['artist'], dict) else track['artist']
+                    cover_url = None
+                    if 'image' in track:
+                        for img in track['image']:
+                            if img['size'] == 'large':
+                                cover_url = img['#text']
+                                break
+                    
+                    # Get user info for scrobbles
+                    user_params = {
+                        'method': 'user.getInfo',
+                        'user': lfm_username,
+                        'api_key': LASTFM_API_KEY,
+                        'format': 'json'
+                    }
+                    async with session.get('https://ws.audioscrobbler.com/2.0/', params=user_params) as user_response:
+                        scrobbles = "Unknown"
+                        profile_pic = None
+                        if user_response.status == 200:
+                            user_data = await user_response.json()
+                            if 'user' in user_data:
+                                scrobbles = user_data['user'].get('playcount', 'Unknown')
+                                if 'image' in user_data['user']:
+                                    for img in user_data['user']['image']:
+                                        if img['size'] == 'large':
+                                            profile_pic = img['#text']
+                                            break
+                        
+                        # Create embed
+                        embed = discord.Embed(
+                            title=f"Now Playing - {lfm_username}",
+                            description=f"**{track_name}**\nby {artist_name}\n\nTotal Scrobbles: {scrobbles}",
+                            color=discord.Color.from_rgb(220, 20, 60)
+                        )
+                        if cover_url:
+                            embed.set_image(url=cover_url)
+                        if profile_pic:
+                            embed.set_thumbnail(url=profile_pic)
+                        
+                        msg = await message.channel.send(embed=embed)
+                        
+                        # Auto-react with thumbs up and thumbs down
+                        try:
+                            await msg.add_reaction('👍')
+                            await msg.add_reaction('👎')
+                        except:
+                            pass
+                        
+                        await log_to_server(f"Fetched Last.fm now playing for {target_user}: {track_name} by {artist_name}", "info")
+        except Exception as e:
+            print(f"Error with ,fm command: {e}")
+            await message.channel.send(f'Error: {str(e)}')
+            await log_to_server(f"Error with ,fm command: {e}", "error")
     
     # Send gif when someone says the specific word
     if 'faggot' in message.content.lower():
