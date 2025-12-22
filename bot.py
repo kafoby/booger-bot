@@ -5,10 +5,10 @@ import random
 import urllib.parse
 import requests
 from keep_alive import keep_alive
-keep_alive()
 from discord import app_commands
 from datetime import timedelta
 from discord.ext import commands
+keep_alive()
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 GOOGLE_API_KEY = "***REMOVED***"
@@ -218,9 +218,6 @@ async def on_message(message):
                             embed.set_image(url=dog_url)
                             await message.channel.send(embed=embed)
                             await log_to_server(f"Sent dog gif to {message.channel} via ,dog command", "info")
-        except asyncio.TimeoutError:
-            await message.channel.send('Error: Request timed out fetching dog gif')
-            await log_to_server(f"Timeout fetching dog gif", "error")
         except Exception as e:
             print(f"Error fetching dog gif: {e}")
             await log_to_server(f"Error fetching dog gif: {e}", "error")
@@ -258,36 +255,50 @@ async def on_message(message):
             target_user = message.mentions[0]
             author = message.author
 
-            # Curated list of lesbian anime kiss gifs
-            kiss_gifs = [
-                'https://media.tenor.com/1jJ-07Y5gBcAAAAd/kiss.gif',
-                'https://media.tenor.com/mCTCy9sDdEYAAAAd/kiss-anime.gif',
-                'https://media.tenor.com/kLlgfvfQNZEAAAAd/anime-kiss.gif',
-                'https://media.tenor.com/5EY5h2O1iyEAAAAd/yuri-kiss.gif',
-                'https://media.tenor.com/Fv4fQPfk3XMAAAAd/kiss-anime-girls.gif',
-                'https://media.tenor.com/3KTRxZ0YnO4AAAAd/anime-kiss-cute.gif',
-                'https://media.tenor.com/4pKTLqoANDgAAAAd/anime-girls-kiss.gif',
-                'https://media.tenor.com/WuZmVNFcsgoAAAAd/lesbian-anime-kiss.gif',
-                'https://media.tenor.com/fBCOlE1mH7wAAAAd/kiss-girl.gif',
-                'https://media.tenor.com/xDgI4X2SqB0AAAAd/anime-yuri-kiss.gif',
-                'https://media.tenor.com/HNWmZvVaWWMAAAAd/kiss-lips.gif',
-                'https://media.tenor.com/sjZfwvKbC6UAAAAd/anime-kiss-girls.gif',
-                'https://media.tenor.com/L-dQXrLTQIAAAAAd/kiss.gif',
-                'https://media.tenor.com/QGfTLjBt2YcAAAAd/anime-kiss.gif',
-                'https://media.tenor.com/1qFTi1gq6joAAAAd/kiss-romantic.gif'
-            ]
-
-            # Pick a random gif
-            gif_url = random.choice(kiss_gifs)
-
-            embed = discord.Embed(
-                title=f"{author.name} kissed {target_user.name}",
-                color=discord.Color.from_rgb(255, 255, 255)
-            )
-            embed.set_image(url=gif_url)
-
-            await message.channel.send(embed=embed)
-            await log_to_server(f"{author} kissed {target_user} via ,kiss command", "info")
+            async with aiohttp.ClientSession() as session:
+                # Search for lesbian anime kiss gifs using Google Custom Search API
+                search_queries = ["lesbian anime kiss gif", "yuri anime kiss", "anime girls kiss gif"]
+                search_query = random.choice(search_queries)
+                
+                search_params = {
+                    "key": GOOGLE_API_KEY,
+                    "cx": CSE_ID,
+                    "q": search_query,
+                    "searchType": "image",
+                    "num": random.randint(1, 10),
+                    "start": random.randint(1, 100)
+                }
+                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status != 200:
+                        await message.channel.send('Error fetching kiss gifs')
+                        await log_to_server(f"Google API error: {resp.status}", "error")
+                        return
+                    
+                    data = await resp.json()
+                    
+                    if 'items' not in data or not data['items']:
+                        await message.channel.send('Could not find kiss gifs')
+                        return
+                    
+                    # Pick a random gif from results
+                    random_result = random.choice(data['items'])
+                    gif_url = random_result.get('link')
+                    
+                    if not gif_url:
+                        await message.channel.send('Could not get gif URL')
+                        return
+                    
+                    embed = discord.Embed(
+                        title=f"{author.name} kissed {target_user.name}",
+                        color=discord.Color.from_rgb(255, 255, 255)
+                    )
+                    embed.set_image(url=gif_url)
+                    
+                    await message.channel.send(embed=embed)
+                    await log_to_server(f"{author} kissed {target_user} via ,kiss command", "info")
+        except asyncio.TimeoutError:
+            await message.channel.send('Error: Request timed out fetching kiss gifs')
+            await log_to_server(f"Timeout fetching kiss gifs", "error")
         except Exception as e:
             print(f"Error with ,kiss command: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -343,9 +354,6 @@ async def on_message(message):
                     
                     await message.channel.send(embed=embed)
                     await log_to_server(f"{author} touched {target_user} via ,touch command", "info")
-        except asyncio.TimeoutError:
-            await message.channel.send('Error: Request timed out fetching kitten images')
-            await log_to_server(f"Timeout fetching kitten images", "error")
         except Exception as e:
             print(f"Error with ,touch command: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -433,9 +441,6 @@ async def on_message(message):
                         await log_to_server(f"Set Last.fm account for {message.author} to {lfm_username}", "info")
                     else:
                         await message.channel.send('Error setting Last.fm account')
-        except asyncio.TimeoutError:
-            await message.channel.send('Error: Request timed out')
-            await log_to_server(f"Timeout setting Last.fm account", "error")
         except Exception as e:
             print(f"Error with ,fmset command: {e}")
             await log_to_server(f"Error with ,fmset command: {e}", "error")
