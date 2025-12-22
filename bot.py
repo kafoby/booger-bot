@@ -249,6 +249,51 @@ async def on_message(message):
             print(f"Error with ,gay command: {e}")
             await log_to_server(f"Error with ,gay command: {e}", "error")
 
+    if message.content.startswith(',kiss '):
+        try:
+            if not message.mentions:
+                await message.channel.send('Please mention a user to kiss')
+                return
+
+            target_user = message.mentions[0]
+            author = message.author
+
+            async with aiohttp.ClientSession() as session:
+                # Search for lesbian anime kiss gifs on Tenor
+                search_params = {
+                    'q': 'lesbian anime kiss',
+                    'key': 'LIVDSRZULELA',
+                    'limit': '50',
+                    'contentfilter': 'moderate'
+                }
+                async with session.get('https://api.tenor.com/v2/search', params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get('results') and len(data['results']) > 0:
+                            # Pick a random gif from results
+                            random_gif = random.choice(data['results'])
+                            gif_url = random_gif['media_formats']['gif']['url']
+
+                            embed = discord.Embed(
+                                title=f"{author.name} kissed {target_user.name}",
+                                color=discord.Color.from_rgb(255, 255, 255)
+                            )
+                            embed.set_image(url=gif_url)
+
+                            await message.channel.send(embed=embed)
+                            await log_to_server(f"{author} kissed {target_user} via ,kiss command", "info")
+                        else:
+                            await message.channel.send('Could not find any kiss gifs')
+                    else:
+                        await message.channel.send('Error fetching kiss gifs')
+        except asyncio.TimeoutError:
+            await message.channel.send('Error: Request timed out fetching kiss gifs')
+            await log_to_server(f"Timeout fetching kiss gifs", "error")
+        except Exception as e:
+            print(f"Error with ,kiss command: {e}")
+            await message.channel.send(f'Error: {str(e)}')
+            await log_to_server(f"Error with ,kiss command: {e}", "error")
+
     if message.content.startswith(',say2 '):
         try:
             parts = message.content.split(maxsplit=2)
