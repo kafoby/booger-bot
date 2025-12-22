@@ -258,37 +258,36 @@ async def on_message(message):
             target_user = message.mentions[0]
             author = message.author
 
-            async with aiohttp.ClientSession() as session:
-                # Search for lesbian anime kiss gifs on Tenor
-                search_params = {
-                    'q': 'lesbian anime kiss',
-                    'key': 'LIVDSRZULELA',
-                    'limit': '50',
-                    'contentfilter': 'moderate'
-                }
-                async with session.get('https://api.tenor.com/v2/search', params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data.get('results') and len(data['results']) > 0:
-                            # Pick a random gif from results
-                            random_gif = random.choice(data['results'])
-                            gif_url = random_gif['media_formats']['gif']['url']
+            # Curated list of lesbian anime kiss gifs
+            kiss_gifs = [
+                'https://media.tenor.com/1jJ-07Y5gBcAAAAd/kiss.gif',
+                'https://media.tenor.com/mCTCy9sDdEYAAAAd/kiss-anime.gif',
+                'https://media.tenor.com/kLlgfvfQNZEAAAAd/anime-kiss.gif',
+                'https://media.tenor.com/5EY5h2O1iyEAAAAd/yuri-kiss.gif',
+                'https://media.tenor.com/Fv4fQPfk3XMAAAAd/kiss-anime-girls.gif',
+                'https://media.tenor.com/3KTRxZ0YnO4AAAAd/anime-kiss-cute.gif',
+                'https://media.tenor.com/4pKTLqoANDgAAAAd/anime-girls-kiss.gif',
+                'https://media.tenor.com/WuZmVNFcsgoAAAAd/lesbian-anime-kiss.gif',
+                'https://media.tenor.com/fBCOlE1mH7wAAAAd/kiss-girl.gif',
+                'https://media.tenor.com/xDgI4X2SqB0AAAAd/anime-yuri-kiss.gif',
+                'https://media.tenor.com/HNWmZvVaWWMAAAAd/kiss-lips.gif',
+                'https://media.tenor.com/sjZfwvKbC6UAAAAd/anime-kiss-girls.gif',
+                'https://media.tenor.com/L-dQXrLTQIAAAAAd/kiss.gif',
+                'https://media.tenor.com/QGfTLjBt2YcAAAAd/anime-kiss.gif',
+                'https://media.tenor.com/1qFTi1gq6joAAAAd/kiss-romantic.gif'
+            ]
 
-                            embed = discord.Embed(
-                                title=f"{author.name} kissed {target_user.name}",
-                                color=discord.Color.from_rgb(255, 255, 255)
-                            )
-                            embed.set_image(url=gif_url)
+            # Pick a random gif
+            gif_url = random.choice(kiss_gifs)
 
-                            await message.channel.send(embed=embed)
-                            await log_to_server(f"{author} kissed {target_user} via ,kiss command", "info")
-                        else:
-                            await message.channel.send('Could not find any kiss gifs')
-                    else:
-                        await message.channel.send('Error fetching kiss gifs')
-        except asyncio.TimeoutError:
-            await message.channel.send('Error: Request timed out fetching kiss gifs')
-            await log_to_server(f"Timeout fetching kiss gifs", "error")
+            embed = discord.Embed(
+                title=f"{author.name} kissed {target_user.name}",
+                color=discord.Color.from_rgb(255, 255, 255)
+            )
+            embed.set_image(url=gif_url)
+
+            await message.channel.send(embed=embed)
+            await log_to_server(f"{author} kissed {target_user} via ,kiss command", "info")
         except Exception as e:
             print(f"Error with ,kiss command: {e}")
             await message.channel.send(f'Error: {str(e)}')
