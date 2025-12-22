@@ -303,11 +303,14 @@ async def on_message(message):
             author = message.author
 
             async with aiohttp.ClientSession() as session:
-                # Search for cute kitten images using Google Custom Search API
+                # Search for cute kitten images and gifs using Google Custom Search API
+                search_queries = ["cute kittens gif", "cute kittens animated", "cute cats gif"]
+                search_query = random.choice(search_queries)
+                
                 search_params = {
                     "key": GOOGLE_API_KEY,
                     "cx": CSE_ID,
-                    "q": "cute kittens",
+                    "q": search_query,
                     "searchType": "image",
                     "num": random.randint(1, 10),  # Randomize which result page to skip queue
                     "start": random.randint(1, 100)  # Random offset for variety
