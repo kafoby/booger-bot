@@ -255,50 +255,22 @@ async def on_message(message):
             target_user = message.mentions[0]
             author = message.author
 
-            async with aiohttp.ClientSession() as session:
-                # Search for lesbian anime kiss gifs using Google Custom Search API
-                search_queries = ["lesbian anime kiss gif", "yuri anime kiss", "anime girls kiss gif"]
-                search_query = random.choice(search_queries)
-                
-                search_params = {
-                    "key": GOOGLE_API_KEY,
-                    "cx": CSE_ID,
-                    "q": search_query,
-                    "searchType": "image",
-                    "num": random.randint(1, 10),
-                    "start": random.randint(1, 100)
-                }
-                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                    if resp.status != 200:
-                        await message.channel.send('Error fetching kiss gifs')
-                        await log_to_server(f"Google API error: {resp.status}", "error")
-                        return
-                    
-                    data = await resp.json()
-                    
-                    if 'items' not in data or not data['items']:
-                        await message.channel.send('Could not find kiss gifs')
-                        return
-                    
-                    # Pick a random gif from results
-                    random_result = random.choice(data['items'])
-                    gif_url = random_result.get('link')
-                    
-                    if not gif_url:
-                        await message.channel.send('Could not get gif URL')
-                        return
-                    
-                    embed = discord.Embed(
-                        title=f"{author.name} kissed {target_user.name}",
-                        color=discord.Color.from_rgb(255, 255, 255)
-                    )
-                    embed.set_image(url=gif_url)
-                    
-                    await message.channel.send(embed=embed)
-                    await log_to_server(f"{author} kissed {target_user} via ,kiss command", "info")
-        except asyncio.TimeoutError:
-            await message.channel.send('Error: Request timed out fetching kiss gifs')
-            await log_to_server(f"Timeout fetching kiss gifs", "error")
+            # Curated list of lesbian anime kiss gifs
+            kiss_gifs = [
+                'https://cdn.nekotina.com/images/AQL8dPyM.gif',
+            ]
+
+            # Pick a random gif
+            gif_url = random.choice(kiss_gifs)
+
+            embed = discord.Embed(
+                title=f"{author.name} kissed {target_user.name}",
+                color=discord.Color.from_rgb(255, 255, 255)
+            )
+            embed.set_image(url=gif_url)
+
+            await message.channel.send(embed=embed)
+            await log_to_server(f"{author} kissed {target_user} via ,kiss command", "info")
         except Exception as e:
             print(f"Error with ,kiss command: {e}")
             await message.channel.send(f'Error: {str(e)}')
