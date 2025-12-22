@@ -293,6 +293,61 @@ async def on_message(message):
             await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error with ,kiss command: {e}", "error")
 
+    if message.content.startswith(',touch '):
+        try:
+            if not message.mentions:
+                await message.channel.send('Please mention a user to touch')
+                return
+
+            target_user = message.mentions[0]
+            author = message.author
+
+            async with aiohttp.ClientSession() as session:
+                # Search for cute kitten images using Google Custom Search API
+                search_params = {
+                    "key": GOOGLE_API_KEY,
+                    "cx": CSE_ID,
+                    "q": "cute kittens",
+                    "searchType": "image",
+                    "num": random.randint(1, 10),  # Randomize which result page to skip queue
+                    "start": random.randint(1, 100)  # Random offset for variety
+                }
+                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status != 200:
+                        await message.channel.send('Error fetching cute kitten images')
+                        await log_to_server(f"Google API error: {resp.status}", "error")
+                        return
+                    
+                    data = await resp.json()
+                    
+                    if 'items' not in data or not data['items']:
+                        await message.channel.send('Could not find cute kitten images')
+                        return
+                    
+                    # Pick a random image from results
+                    random_result = random.choice(data['items'])
+                    image_url = random_result.get('link')
+                    
+                    if not image_url:
+                        await message.channel.send('Could not get image URL')
+                        return
+                    
+                    embed = discord.Embed(
+                        title=f"{author.name} touched {target_user.name}",
+                        color=discord.Color.from_rgb(255, 192, 203)
+                    )
+                    embed.set_image(url=image_url)
+                    
+                    await message.channel.send(embed=embed)
+                    await log_to_server(f"{author} touched {target_user} via ,touch command", "info")
+        except asyncio.TimeoutError:
+            await message.channel.send('Error: Request timed out fetching kitten images')
+            await log_to_server(f"Timeout fetching kitten images", "error")
+        except Exception as e:
+            print(f"Error with ,touch command: {e}")
+            await message.channel.send(f'Error: {str(e)}')
+            await log_to_server(f"Error with ,touch command: {e}", "error")
+
     if message.content.startswith(',say2 '):
         try:
             parts = message.content.split(maxsplit=2)
