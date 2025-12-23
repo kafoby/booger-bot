@@ -436,6 +436,52 @@ async def on_message(message):
             print(f"Error with ,crocodile command: {e}")
             await message.channel.send(f"Error: {str(e)}")
 
+    if message.content.startswith(',seal'):
+        try:
+            async with aiohttp.ClientSession() as session:
+                search_queries = ["baby harp seal", "harp seal pup", "baby seal gif", "harp seal pup gif"]
+                search_query = random.choice(search_queries)
+
+                search_params = {
+                    "key": GOOGLE_API_KEY,
+                    "cx": CSE_ID,
+                    "q": search_query,
+                    "searchType": "image",
+                    "num": random.randint(5, 10),
+                    "start": random.randint(1, 50)
+                }
+
+                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status != 200:
+                        await message.channel.send("Error fetching seal image")
+                        return
+
+                    data = await resp.json()
+
+                    if 'items' not in data or not data['items']:
+                        await message.channel.send("Couldn't find any seals right now")
+                        return
+
+                    random_result = random.choice(data['items'])
+                    image_url = random_result.get('link')
+
+                    if not image_url:
+                        await message.channel.send("Couldn't get image URL")
+                        return
+
+                    embed = discord.Embed(
+                        title="Here is a baby harp seal for you!",
+                        color=discord.Color.purple()
+                    )
+                    embed.set_image(url=image_url)
+
+                    await message.channel.send(embed=embed)
+                    await log_to_server(f"Sent seal image to {message.channel} via ,seal command", "info")
+        except Exception as e:
+            print(f"Error with ,seal command: {e}")
+            await message.channel.send(f"Error: {str(e)}")
+            await log_to_server(f"Error with ,seal command: {e}", "error")
+
     if message.content.startswith(',say2 '):
         try:
             parts = message.content.split(maxsplit=2)
