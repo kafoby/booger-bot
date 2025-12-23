@@ -22,7 +22,6 @@ API_URL = 'http://127.0.0.1:5000/api/logs'
 WARNS_URL = 'http://127.0.0.1:5000/api/warns'
 LFM_URL = 'http://127.0.0.1:5000/api/lfm'
 ALLOWED_CHANNELS = [
-    # Channel IDs not names dumbass
     1452216636819112010,
     1068562196390490222,
 ]
@@ -427,7 +426,7 @@ async def on_message(message):
 
                     embed = discord.Embed(
                         title="Here is a crocodile for you!",
-                        color=discord.Colour.orange()
+                        color=discord.Color.purple()
                     )
                     embed.set_image(url=image_url)
 
@@ -847,7 +846,6 @@ async def playspotify(interaction: discord.Interaction, query: str):
 
     if "spotify" in query:
         try:
-            # Extract track ID from Spotify URL (format: spotify:track:ID or https://open.spotify.com/track/ID)
             track_id = None
             if "spotify:track:" in query:
                 track_id = query.split("spotify:track:")[1].split("?")[0]
