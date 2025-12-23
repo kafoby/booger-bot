@@ -70,7 +70,7 @@ async def on_ready():
     if channel:
         try:
             if isinstance(channel, discord.TextChannel):
-                await channel.send(f"i'm soo turned up rn {'<a:tasty:1166810347966058557>' * 3}")
+                await channel.send(f"i'm soo turned up rn {'' * 3}")
                 print("Message sent successfully!")
                 await log_to_server(f"Sent boot message to channel {channel}", "info")
             else:
