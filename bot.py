@@ -531,13 +531,21 @@ async def on_message(message):
             target_user = message.mentions[0] if message.mentions else message.author
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(f'{LFM_URL}/{target_user.id}') as response:
+                print(f"Fetching LFM data for user {target_user.id} from {LFM_URL}/{target_user.id}")
+                async with session.get(f'{LFM_URL}/{target_user.id}', timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    print(f"LFM response status: {response.status}")
                     if response.status != 200:
+                        error_text = await response.text()
+                        print(f"LFM error response: {error_text}")
                         await message.channel.send(f'{target_user.mention} has not set their Last.fm account. Use `,fmset <username>`')
                         return
 
                     connection = await response.json()
-                    lfm_username = connection['lastfmUsername']
+                    print(f"LFM connection data: {connection}")
+                    lfm_username = connection.get('lastfmUsername')
+                    if not lfm_username:
+                        await message.channel.send(f'{target_user.mention} has not set their Last.fm account. Use `,fmset <username>`')
+                        return
 
                 lfm_params = {
                     'method': 'user.getRecentTracks',
