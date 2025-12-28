@@ -12,9 +12,13 @@ from discord import app_commands
 from datetime import timedelta
 from discord.ext import commands
 from keep_alive import keep_alive
+import re
+from petpetgif import petpet
+import io
 keep_alive()
 
 TOKEN = os.getenv('DISCORD_TOKEN')
+GITHUB_TOKEN = "***REMOVED***"
 GOOGLE_API_KEY = "***REMOVED***"
 CSE_ID = "e44706575588a42a2"
 LASTFM_API_KEY = os.getenv('LASTFM_API_KEY')
@@ -22,8 +26,7 @@ API_URL = 'http://127.0.0.1:5000/api/logs'
 WARNS_URL = 'http://127.0.0.1:5000/api/warns'
 LFM_URL = 'http://127.0.0.1:5000/api/lfm'
 ALLOWED_CHANNELS = [
-    1452216636819112010,
-    1068562196390490222,
+    1452216636819112010,  #bot testing
 ]
 
 print(f"Token available: {bool(TOKEN)}")
@@ -31,11 +34,11 @@ print(f"Token value (first 20 chars): {TOKEN[:20] if TOKEN else 'None'}")
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.messages = True
+intents.guilds = True
+intents.members = True
 
-bot = commands.Bot(
-    command_prefix = ",",
-    intents = intents
-)
+bot = commands.Bot(command_prefix=",", intents=intents)
 tree = bot.tree
 
 print("Discord bot initialized")
@@ -70,7 +73,7 @@ async def on_ready():
     if channel:
         try:
             if isinstance(channel, discord.TextChannel):
-                await channel.send(f"i'm soo turned up rn {'' * 3}")
+                await channel.send(f"clanker is up and running on replit, [and why he so eepy](https://tenor.com/view/sleepy-cat-baby-cat-coffee-cofffee-cat-sleeping-cat-gif-11793912039839338151)")
                 print("Message sent successfully!")
                 await log_to_server(f"Sent boot message to channel {channel}", "info")
             else:
@@ -102,6 +105,87 @@ async def on_message(message):
     msg = f"Received message from {message.author}: {message.content}"
     print(msg)
     await log_to_server(msg, "info")
+
+    if message.content.startswith(',rapeon'):
+        if message.author.id not in [934443300520345631, 954606816820613160]:
+            await message.channel.send("You are not allowed to use this command.")
+            return
+
+        bot.rape_enabled = True
+        await message.channel.send("Rape mode ON😈")
+        return
+
+    if message.content.startswith(',rapeoff'):
+        if message.author.id not in [934443300520345631, 954606816820613160]:
+            await message.channel.send("You are not allowed to use this command.")
+            return
+
+        bot.rape_enabled = False
+        await message.channel.send("Rape mode OFF <a:cr_asad:1166759175217487902>")
+        return
+
+    if message.content.startswith(',rape '):
+        if message.author.id not in [934443300520345631, 954606816820613160]:
+            await message.channel.send("You are not allowed to use this command.")
+            return
+
+        if not getattr(bot, 'rape_enabled', False):
+            await message.channel.send("The `rape` command is currently disabled.")
+            return
+
+        try:
+            if not message.mentions:
+                await message.channel.send('Please mention a user to rape')
+                return
+
+            target_user = message.mentions[0]
+            author = message.author
+
+            async with aiohttp.ClientSession() as session:
+
+                search_queries = ["rape hentai gif", "rape hentai animated", "yuri rape gif", "femboy rape hentai", "cat girl rape hentai", "ebony rape hentai"]
+                search_query = random.choice(search_queries)
+
+                search_params = {
+                    "key": GOOGLE_API_KEY,
+                    "cx": CSE_ID,
+                    "q": search_query,
+                    "searchType": "image",
+                    "num": random.randint(1, 10),  
+                    "start": random.randint(1, 100)
+                }
+                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status != 200:
+                        await message.channel.send('Error fetching rape image')
+                        await log_to_server(f"Google API error: {resp.status}", "error")
+                        return
+
+                    data = await resp.json()
+
+                    if 'items' not in data or not data['items']:
+                        await message.channel.send('Could not find rape images')
+                        return
+
+                    random_result = random.choice(data['items'])
+                    image_url = random_result.get('link')
+
+                    if not image_url:
+                        await message.channel.send('Could not get image URL')
+                        return
+
+                    embed = discord.Embed(
+                        title=f"{author.name} raped {target_user.name}",
+                        color=discord.Color.from_rgb(255, 192, 203)
+                    )
+                    embed.set_image(url=image_url)
+
+                    await message.channel.send(embed=embed)
+                    await log_to_server(f"{author} raped {target_user} via ,rape command", "info")
+                    return
+        except Exception as e:
+            print(f"Error with ,rape command: {e}")
+            await message.channel.send(f'Error: {str(e)}')
+            await log_to_server(f"Error with ,rape command: {e}", "error")
 
     if message.content.startswith(',warn '):
         try:
@@ -194,64 +278,6 @@ async def on_message(message):
             print(f"Error with ,say command: {e}")
             await log_to_server(f"Error with ,say command: {e}", "error")
 
-    if message.content.startswith(',rape '):
-        if message.author.id not in [934443300520345631, 954606816820613160]:
-            await message.channel.send("You are not allowed to use this command.")
-            return
-
-        try:
-            if not message.mentions:
-                await message.channel.send('Please mention a user to rape')
-                return
-
-            target_user = message.mentions[0]
-            author = message.author
-
-            async with aiohttp.ClientSession() as session:
-
-                search_queries = ["rape hentai gif", "rape hentai animated", "nigger rape gif"]
-                search_query = random.choice(search_queries)
-
-                search_params = {
-                    "key": GOOGLE_API_KEY,
-                    "cx": CSE_ID,
-                    "q": search_query,
-                    "searchType": "image",
-                    "num": random.randint(1, 10),  
-                    "start": random.randint(1, 100)
-                }
-                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                    if resp.status != 200:
-                        await message.channel.send('Error fetching rape image')
-                        await log_to_server(f"Google API error: {resp.status}", "error")
-                        return
-
-                    data = await resp.json()
-
-                    if 'items' not in data or not data['items']:
-                        await message.channel.send('Could not find rape images')
-                        return
-
-                    random_result = random.choice(data['items'])
-                    image_url = random_result.get('link')
-
-                    if not image_url:
-                        await message.channel.send('Could not get image URL')
-                        return
-
-                    embed = discord.Embed(
-                        title=f"{author.name} raped {target_user.name}",
-                        color=discord.Color.purple()
-                    )
-                    embed.set_image(url=image_url)
-
-                    await message.channel.send(embed=embed)
-                    await log_to_server(f"{author} raped {target_user} via ,rape command", "info")
-        except Exception as e:
-            print(f"Error with ,rape command: {e}")
-            await message.channel.send(f'Error: {str(e)}')
-            await log_to_server(f"Error with ,rape command: {e}", "error")
-
     if message.content.startswith(',cat'):
         try:
             async with aiohttp.ClientSession() as session:
@@ -336,10 +362,10 @@ async def on_message(message):
             await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error with ,kiss command: {e}", "error")
 
-    if message.content.startswith(',touch '):
+    if message.content.startswith(',slap '):
         try:
             if not message.mentions:
-                await message.channel.send('Please mention a user to touch')
+                await message.channel.send('Please mention a user to slap')
                 return
 
             target_user = message.mentions[0]
@@ -347,7 +373,7 @@ async def on_message(message):
 
             async with aiohttp.ClientSession() as session:
                 
-                search_queries = ["cute kittens gif", "cute kittens animated", "cute cats gif"]
+                search_queries = ["anime girl slap gif", "anime girl slap animated", "yuri slap gif", "yuri slap animated", "anime cat girl slap gif", "anime cat girl slap animated"]
                 search_query = random.choice(search_queries)
                 
                 search_params = {
@@ -360,14 +386,14 @@ async def on_message(message):
                 }
                 async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status != 200:
-                        await message.channel.send('Error fetching cute kitten images')
+                        await message.channel.send('Error fetching slap images')
                         await log_to_server(f"Google API error: {resp.status}", "error")
                         return
                     
                     data = await resp.json()
                     
                     if 'items' not in data or not data['items']:
-                        await message.channel.send('Could not find cute kitten images')
+                        await message.channel.send('Could not find slap images')
                         return
                     
                     
@@ -379,17 +405,17 @@ async def on_message(message):
                         return
                     
                     embed = discord.Embed(
-                        title=f"{author.name} touched {target_user.name}",
+                        title=f"{author.name} slapped {target_user.name}",
                         color=discord.Color.purple()
                     )
                     embed.set_image(url=image_url)
                     
                     await message.channel.send(embed=embed)
-                    await log_to_server(f"{author} touched {target_user} via ,touch command", "info")
+                    await log_to_server(f"{author} slapped {target_user} via ,slap command", "info")
         except Exception as e:
-            print(f"Error with ,touch command: {e}")
+            print(f"Error with ,slap command: {e}")
             await message.channel.send(f'Error: {str(e)}')
-            await log_to_server(f"Error with ,touch command: {e}", "error")
+            await log_to_server(f"Error with ,slap command: {e}", "error")
 
     if message.content.startswith(',crocodile'):
         try:
@@ -481,6 +507,41 @@ async def on_message(message):
             await message.channel.send(f"Error: {str(e)}")
             await log_to_server(f"Error with ,seal command: {e}", "error")
 
+    if message.content.startswith(",pet "):
+        try:
+            if not message.mentions:
+                await message.channel.send("Mention a user to pet")
+                return
+
+            target = message.mentions[0]
+            author = message.author
+
+            avatar_url = target.display_avatar.with_format("png").with_size(512).url
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(avatar_url) as resp:
+                    avatar_bytes = await resp.read()
+
+            source = io.BytesIO(avatar_bytes)
+            dest = io.BytesIO()
+
+            petpet.make(source, dest)
+            dest.seek(0)
+
+            embed = discord.Embed(
+                title=f"{author.name} pets {target.name}",
+                color=0x9b59b6
+            )
+            embed.set_image(url="attachment://pet.gif")
+
+            await message.channel.send(
+                embed=embed,
+                file=discord.File(dest, filename="pet.gif")
+            )
+
+        except Exception as e:
+            await message.channel.send(str(e))
+
     if message.content.startswith(',say2 '):
         try:
             parts = message.content.split(maxsplit=2)
@@ -544,6 +605,51 @@ async def on_message(message):
             print(f"Error timing out user: {e}")
             await message.channel.send(f'Error: {str(e)}')
             await log_to_server(f"Error timing out user: {e}", "error")
+
+    if message.content.startswith(',diddle '):
+        try:
+            if not message.mentions:
+                await message.channel.send("Please mention a user to diddle.")
+                return
+
+            target = message.mentions[0]
+            author = message.author
+
+            async with aiohttp.ClientSession() as session:
+                params = {
+                    "key": GOOGLE_API_KEY,
+                    "cx": CSE_ID,
+                    "searchType": "image",
+                    "q": "diddy gif",
+                    "fileType": "gif",
+                    "num": 10
+                }
+
+                async with session.get("https://www.googleapis.com/customsearch/v1", params=params, timeout=30) as resp:
+                    if resp.status != 200:
+                        await message.channel.send("Error fetching Diddy GIFs.")
+                        return
+                    data = await resp.json()
+
+            gif_items = [item["link"] for item in data.get("items", []) if item.get("mime") == "image/gif"]
+
+            if not gif_items:
+                await message.channel.send("Couldn't find any Diddy GIFs right now.")
+                return
+
+            gif_url = random.choice(gif_items)
+
+            embed = discord.Embed(
+                title=f"{author.name} diddled {target.name}",
+                color=discord.Color.purple()
+            )
+            embed.set_image(url=gif_url)
+
+            await message.channel.send(embed=embed)
+
+        except Exception as e:
+            print(f"Error with ,diddle command: {e}")
+            await message.channel.send("Something went wrong while fetching the GIF.")
 
     if message.content.startswith(',fmset '):
         try:
@@ -689,86 +795,282 @@ async def on_message(message):
             print(f"Error reacting to message: {e}")
             await log_to_server(f"Error reacting to message: {e}", "error")
 
+@tree.command(name="youtube", description="share youtube video with download options")
+@app_commands.describe(link="youtube url")
+async def youtube(interaction: discord.Interaction, link: str):
+    await interaction.response.defer()
+
+    if "youtube.com" not in link and "youtu.be" not in link:
+        await interaction.followup.send("Invalid YouTube link.")
+        return
+
+    await interaction.followup.send(f"[yt]({link})")
+
+    ss_download = link.replace("youtube.com", "ssyoutube.com").replace("youtu.be", "ssyoutube.com")
+
+    embed = discord.Embed(color=0xFF0000)
+    embed.description = f"[Download video (up to 720p)]({ss_download})\n[Upload downloaded video to catbox.moe for permanent share](https://catbox.moe/)"
+
+    await interaction.followup.send(embed=embed)
+
 @tree.command(name="lumsearch", description="Search Google")
-@app_commands.describe(query="The search query")
+@app_commands.describe(query="What do you want to search on Google?")
 async def search(interaction: discord.Interaction, query: str):
+    await interaction.response.defer()
+
     try:
         async with aiohttp.ClientSession() as session:
             params = {
                 "key": GOOGLE_API_KEY,
                 "cx": CSE_ID,
                 "q": query,
-                "num": 1
+                "num": 5
             }
             async with session.get("https://www.googleapis.com/customsearch/v1", params=params) as resp:
                 if resp.status != 200:
-                    raise Exception(f"Google API returned {resp.status}")
+                    await interaction.followup.send("Error contacting Google API.")
+                    return
                 data = await resp.json()
 
-        items = data.get("items")
+        items = data.get("items", [])
         if not items:
-            await interaction.response.send_message("No results found")
+            await interaction.followup.send("No results found for your query.")
             return
 
-        first_result = items[0]
-        title = first_result.get("title")
-        link = first_result.get("link")
-        snippet = first_result.get("snippet")
-
         embed = discord.Embed(
-            title=title,
-            url=link,
-            description=snippet,
+            title="Google Results",
+            description=f"Top 5 results for: **{query}**",
             color=discord.Color.purple()
         )
 
-        await interaction.response.send_message(embed=embed)
+        for i, item in enumerate(items[:5], 1):
+            title = item.get("title", "No title")
+            link = item.get("link", "")
+            snippet = item.get("snippet", "No description available.")
+            embed.add_field(
+                name=f"{i}. {title}",
+                value=f"[Link]({link})\n{snippet}",
+                inline=False
+            )
+
+        await interaction.followup.send(embed=embed)
 
     except Exception as e:
-        print(f"/search error: {e}")
-        if interaction.response.is_done():
-            await interaction.followup.send("Something went wrong")
-        else:
-            await interaction.response.send_message("Something went wrong")
+        print(f"/lumsearch error: {e}")
+        await interaction.followup.send("Something went wrong while searching.")
+              
+@tree.command(name="reel", description="embeds an insta reel of your choice")
+@app_commands.describe(link="reel url")
+async def reel(interaction: discord.Interaction, link: str):
+    await interaction.response.defer()
 
-        @tree.command(name="diddy", description="Diddle someone!")
-        async def didddy(interaction: discord.Interaction):
-            await interaction.response.defer()
-            try:
-                params = {
-                    "key": GOOGLE_API_KEY,
-                    "cx": CSE_ID,
-                    "searchType": "image",
-                    "q": "diddy gif",
-                    "fileType": "gif",  
-                    "num": 10
-                }
+    modified_link = link.replace("instagram.com", "kkinstagram.com")
 
-                response = requests.get("https://www.googleapis.com/customsearch/v1", params=params)
-                print("Google API Status Code:", response.status_code)
-                print("Google API Response:", response.text[:500])  
+    await interaction.followup.send(f"[reel]({modified_link})")
 
-                data = response.json()
+@tree.command(name="tiktok", description="embed tiktok url of your choice")
+@app_commands.describe(link="url")
+async def tiktok(interaction: discord.Interaction, link: str):
+    await interaction.response.defer()
 
-                gif_items = [item["link"] for item in data.get("items", []) if item.get("mime") == "image/gif"]
+    # modified_link = (
+        # link.replace("vm.tiktok.com", "d.tnktok.com")
+        #     .replace("www.tiktok.com", "d.tnktok.com")
+        #     .replace("tiktok.com", "d.tnktok.com")
+        #     .replace("vt.tiktok.com", "d.tnktok.com")
+    # )
+    modified_link = re.sub(r"https://.*\.tiktok", "https://d.tnktok", link)
 
-                if gif_items:
-                    gif_url = random.choice(gif_items)
-
-                    embed = discord.Embed(
-                        title="Diddy blud",
-                        color=discord.Color.purple()
-                    )
-                    embed.set_image(url=gif_url)
-
-                    await interaction.followup.send(embed=embed)
-                else:
-                    await interaction.followup.send("Couldn't find any Diddy GIFs")
-            except Exception as e:
-                print("Error fetching GIFs:", e)
-                await interaction.followup.send(f"Something went wrong: {e}")
+    await interaction.followup.send(f"[tiktok]({modified_link})")
 
 yt_dlp.utils.bug_reports_message = lambda: ''
+
+@tree.command(name="github", description="search stuff up on github")
+@app_commands.describe(query="what do you want to search?", type="repo (default), code, or user")
+async def github(interaction: discord.Interaction, query: str, type: str = "repo"):
+    await interaction.response.defer()
+
+    if type not in ["repo", "code", "user"]:
+        await interaction.followup.send("Type must be 'repo', 'code', or 'user'.")
+        return
+
+    search_type = "repositories" if type == "repo" else "code" if type == "code" else "users"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"https://api.github.com/search/{search_type}"
+            params = {"q": query, "per_page": 5}
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": f"token {GITHUB_TOKEN}"
+            }
+            async with session.get(url, params=params, headers=headers) as resp:
+                if resp.status != 200:
+                    await interaction.followup.send("Error contacting GitHub API (check token or rate limit).")
+                    return
+                data = await resp.json()
+
+        items = data.get("items", [])
+        if not items:
+            await interaction.followup.send("No results found.")
+            return
+
+        embed = discord.Embed(title="GitHub Search Results", color=0x9b59b6)
+        embed.description = f"Top 5 {type} results for: **{query}**"
+
+        for i, item in enumerate(items[:5], 1):
+            if type == "repo":
+                name = item["full_name"]
+                desc = item.get("description", "No description")
+                url = item["html_url"]
+                embed.add_field(
+                    name=f"{i}. {name}",
+                    value=f"{desc}\n[View on GitHub]({url})",
+                    inline=False
+                )
+            elif type == "code":
+                repo = item["repository"]["full_name"]
+                path = item["path"]
+                url = item["html_url"]
+                embed.add_field(
+                    name=f"{i}. {repo} → {path}",
+                    value=f"[View code]({url})",
+                    inline=False
+                )
+            elif type == "user":
+                login = item["login"]
+                url = item["html_url"]
+                embed.add_field(
+                    name=f"{i}. @{login}",
+                    value=f"[View profile]({url})",
+                    inline=False
+                )
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception:
+        await interaction.followup.send("Something went wrong while searching GitHub.")
+
+@tree.command(name="stackoverflow", description="search on stack overflow")
+@app_commands.describe(query="what do you want to search?")
+async def so(interaction: discord.Interaction, query: str):
+    await interaction.response.defer()
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = "https://api.stackexchange.com/2.3/search/advanced"
+            params = {
+                "site": "stackoverflow",
+                "order": "desc",
+                "sort": "relevance",
+                "q": query,
+                "pagesize": 5
+            }
+            async with session.get(url, params=params) as resp:
+                if resp.status != 200:
+                    await interaction.followup.send("Error contacting Stack Exchange API.")
+                    return
+                data = await resp.json()
+
+        items = data.get("items", [])
+        if not items:
+            await interaction.followup.send("No results found.")
+            return
+
+        embed = discord.Embed(title="Stack Overflow Results", color=0x9b59b6)
+        embed.description = f"Top 5 questions for: **{query}**"
+
+        for i, item in enumerate(items[:5], 1):
+            title = item["title"]
+            url = item["link"]
+            votes = item["score"]
+            answers = item["answer_count"]
+            answered = "✅" if item["is_answered"] else "❌"
+            embed.add_field(
+                name=f"{i}. {title} ({votes} votes, {answers} answers {answered})",
+                value=f"[View question]({url})",
+                inline=False
+            )
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception:
+        await interaction.followup.send("Something went wrong while searching Stack Overflow.")
+
+@tree.command(name="askgpt", description="ask chatgpt a question")
+@app_commands.describe(question="Your question:")
+async def askchatgpt(interaction: discord.Interaction, question: str):
+    await interaction.response.defer()
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": "Bearer YOUR_OPENAI_API_KEY",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "You are ChatGPT, a helpful AI assistant that was made by lumiin."},
+                    {"role": "user", "content": question}
+                ],
+                "temperature": 0.7
+            }
+
+            async with session.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers) as resp:
+                if resp.status != 200:
+                    await interaction.followup.send("Error contacting OpenAI API.")
+                    return
+                data = await resp.json()
+
+        answer = data["choices"][0]["message"]["content"]
+
+        if len(answer) > 2000:
+            answer = answer[:1997] + "..."
+
+        embed = discord.Embed(title="ChatGPT Answer", description=answer, color=0x9b59b6)
+        embed.set_footer(text=f"Asked by {interaction.user.display_name}")
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception:
+        await interaction.followup.send("Something went wrong while asking ChatGPT.")
+
+@tree.command(name="askgrok", description="ask grok something")
+@app_commands.describe(question="your question")
+async def askgrok(interaction: discord.Interaction, question: str):
+    await interaction.response.defer()
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": "Bearer YOUR_XAI_API_KEY",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "grok-4-1-fast",  # Updated model name
+                "messages": [{"role": "user", "content": question}],
+                "temperature": 0.8
+            }
+
+            async with session.post("https://api.x.ai/v1/chat/completions", json=payload, headers=headers) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    await interaction.followup.send(f"API error {resp.status}: {text}")
+                    return
+                data = await resp.json()
+
+        answer = data["choices"][0]["message"]["content"]
+        if len(answer) > 2000:
+            answer = answer[:1997] + "..."
+
+        embed = discord.Embed(title="Grok", description=answer, color=0x9b59b6)
+        embed.set_footer(text=f"Asked by {interaction.user.display_name}")
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        await interaction.followup.send(f"Error: {str(e)}")
 
 ytdl_format_options = {
     'format': 'bestaudio/best',
