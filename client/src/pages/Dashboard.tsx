@@ -35,25 +35,41 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
-  const { data: logs, isLoading, error, refetch } = useLogs();
-  const createLog = useCreateLog();
-  const { toast } = useToast();
-  
   const [search, setSearch] = useState("");
+  const [levelFilter, setLevelFilter] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [newLevel, setNewLevel] = useState("info");
 
-  // Stats calculation
-  const totalLogs = logs?.length || 0;
-  const errorCount = logs?.filter(l => l.level.toLowerCase() === "error").length || 0;
-  const warningCount = logs?.filter(l => l.level.toLowerCase() === "warning").length || 0;
-  const infoCount = logs?.filter(l => l.level.toLowerCase() === "info").length || 0;
+  const {
+    data,
+    isLoading,
+    error,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage
+  } = useLogs(levelFilter, search);
+  const createLog = useCreateLog();
+  const { toast } = useToast();
 
-  const filteredLogs = logs?.filter(log => 
-    log.message.toLowerCase().includes(search.toLowerCase()) ||
-    log.level.toLowerCase().includes(search.toLowerCase())
-  ).sort((a, b) => new Date(b.timestamp || "").getTime() - new Date(a.timestamp || "").getTime());
+  // Flatten all pages into a single array
+  const logs = data?.pages.flatMap(page => page.logs) || [];
+
+  // Stats from server (counts all logs in DB, not just loaded ones)
+  const stats = data?.pages[0]?.stats;
+  const totalLogs = stats?.total || 0;
+  const errorCount = stats?.error || 0;
+  const warningCount = stats?.warning || 0;
+  const infoCount = stats?.info || 0;
+
+  // Total count of filtered results (from backend)
+  const filteredTotal = data?.pages[0]?.total || 0;
+
+  // Filter handler
+  const handleLevelFilter = (level: string | null) => {
+    setLevelFilter(levelFilter === level ? null : level);
+  };
 
   const handleCreateLog = async () => {
     try {
@@ -84,48 +100,71 @@ export default function Dashboard() {
       <main className="flex-1 container mx-auto px-4 py-8 space-y-8">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatsCard 
-            title="Total Events" 
-            value={totalLogs} 
-            icon={Activity} 
-            trend="Live monitoring active"
+          <StatsCard
+            title="Total Events"
+            value={totalLogs}
+            icon={Activity}
+            trend={levelFilter ? "Click to clear filters" : "Live monitoring active"}
             className="border-primary/20 bg-primary/5"
+            onClick={() => setLevelFilter(null)}
+            isActive={levelFilter === null}
           />
-          <StatsCard 
-            title="System Errors" 
-            value={errorCount} 
-            icon={AlertOctagon} 
+          <StatsCard
+            title="System Errors"
+            value={errorCount}
+            icon={AlertOctagon}
             className="border-red-500/20 bg-red-500/5 text-red-500"
+            onClick={() => handleLevelFilter("error")}
+            isActive={levelFilter === "error"}
           />
-          <StatsCard 
-            title="Warnings" 
-            value={warningCount} 
-            icon={AlertOctagon} 
+          <StatsCard
+            title="Warnings"
+            value={warningCount}
+            icon={AlertOctagon}
             className="border-yellow-500/20 bg-yellow-500/5 text-yellow-500"
+            onClick={() => handleLevelFilter("warning")}
+            isActive={levelFilter === "warning"}
           />
-          <StatsCard 
-            title="Info Logs" 
-            value={infoCount} 
-            icon={CheckCircle2} 
+          <StatsCard
+            title="Info Logs"
+            value={infoCount}
+            icon={CheckCircle2}
             className="border-blue-500/20 bg-blue-500/5 text-blue-500"
+            onClick={() => handleLevelFilter("info")}
+            isActive={levelFilter === "info"}
           />
         </div>
 
         {/* Toolbar */}
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-card/30 p-4 rounded-xl border border-border/40 backdrop-blur-sm sticky top-[70px] z-30">
-          <div className="relative w-full md:w-96 group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <input 
-              placeholder="Search logs via regex or keywords..."
-              className="w-full bg-background/50 border border-border rounded-lg pl-10 pr-4 py-2 text-sm font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex flex-col md:flex-row gap-2 w-full md:flex-1">
+            <div className="relative w-full md:flex-1 group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <input
+                placeholder="Search logs via regex or keywords..."
+                className="w-full bg-background/50 border border-border rounded-lg pl-10 pr-4 py-2 text-sm font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            {levelFilter && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 border border-primary/20 rounded-lg text-xs font-mono">
+                <Filter className="w-3 h-3 text-primary" />
+                <span className="text-primary">Filtered: {levelFilter.toUpperCase()}</span>
+                <button
+                  onClick={() => setLevelFilter(null)}
+                  className="ml-1 text-primary hover:text-primary/70 transition-colors"
+                  aria-label="Clear filter"
+                >
+                  ×
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 w-full md:w-auto">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => refetch()}
               className="font-mono text-xs gap-2 border-border/50 hover:border-primary hover:text-primary transition-colors"
@@ -133,10 +172,10 @@ export default function Dashboard() {
               <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
               REFRESH
             </Button>
-            
+
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button 
+                <Button
                   size="sm"
                   className="font-mono text-xs gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20"
                 >
@@ -233,17 +272,38 @@ export default function Dashboard() {
                   RETRY CONNECTION
                 </Button>
               </div>
-            ) : filteredLogs?.length === 0 ? (
+            ) : logs?.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-20 opacity-50">
                 <Terminal className="w-12 h-12 mb-4 text-muted-foreground" />
                 <p className="font-mono text-muted-foreground">No system logs found.</p>
               </div>
             ) : (
-              <div className="space-y-2 pb-4">
-                {filteredLogs?.map((log, i) => (
-                  <LogCard key={log.id} log={log} index={i} />
-                ))}
-              </div>
+              <>
+                <div className="space-y-2 pb-4">
+                  {logs?.map((log, i) => (
+                    <LogCard key={log.id} log={log} index={i} />
+                  ))}
+                </div>
+                {hasNextPage && (
+                  <div className="flex justify-center py-6">
+                    <Button
+                      onClick={() => fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                      variant="outline"
+                      className="font-mono text-xs border-primary/50 hover:bg-primary/10"
+                    >
+                      {isFetchingNextPage ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
+                          LOADING...
+                        </>
+                      ) : (
+                        `LOAD MORE (${logs.length} / ${filteredTotal})`
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

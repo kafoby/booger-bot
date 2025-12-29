@@ -1,15 +1,49 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type InsertLog } from "@shared/routes";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@shared/routes";
+import type { InsertLog, Log } from "@shared/schema";
 
-export function useLogs() {
-  return useQuery({
-    queryKey: [api.logs.list.path],
-    queryFn: async () => {
-      const res = await fetch(api.logs.list.path, { credentials: "include" });
+interface LogStats {
+  total: number;
+  error: number;
+  warning: number;
+  info: number;
+}
+
+interface LogsResponse {
+  logs: Log[];
+  stats: LogStats;
+  limit: number;
+  offset: number;
+  total: number;
+  hasMore: boolean;
+}
+
+export function useLogs(level?: string | null, search?: string) {
+  return useInfiniteQuery({
+    queryKey: [api.logs.list.path, level, search],
+    queryFn: async ({ pageParam = 0 }) => {
+      const params = new URLSearchParams({
+        limit: '100',
+        offset: pageParam.toString(),
+      });
+      if (level) {
+        params.append('level', level);
+      }
+      if (search && search.trim()) {
+        params.append('search', search.trim());
+      }
+      const res = await fetch(
+        `${api.logs.list.path}?${params.toString()}`,
+        { credentials: "include" }
+      );
       if (!res.ok) throw new Error("Failed to fetch logs");
-      return api.logs.list.responses[200].parse(await res.json());
+      return await res.json() as LogsResponse;
     },
-    refetchInterval: 3000, // Auto-refresh every 3s for dashboard feel
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.offset + lastPage.limit : undefined;
+    },
+    initialPageParam: 0,
+    refetchInterval: 30000, // Reduced to 30s to avoid excessive requests
   });
 }
 

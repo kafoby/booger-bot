@@ -1,6 +1,28 @@
-import { pgTable, text, serial, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Users table for Discord OAuth
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  discordId: text("discord_id").notNull().unique(),
+  username: text("username").notNull(),
+  discriminator: text("discriminator"),
+  avatar: text("avatar"),
+  email: text("email"),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  hasRequiredRole: boolean("has_required_role").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Sessions table for express-session with connect-pg-simple
+export const sessions = pgTable("session", {
+  sid: text("sid").primaryKey(),
+  sess: text("sess").notNull(),
+  expire: timestamp("expire").notNull(),
+});
 
 export const logs = pgTable("logs", {
   id: serial("id").primaryKey(),
@@ -24,9 +46,41 @@ export const lfmConnections = pgTable("lfm_connections", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+// Bot status for heartbeat tracking
+export const botStatus = pgTable("bot_status", {
+  id: serial("id").primaryKey(),
+  lastHeartbeat: timestamp("last_heartbeat").defaultNow(),
+  status: text("status").notNull().default("offline"),
+  uptime: text("uptime"),
+  startedAt: timestamp("started_at"),
+  errorMessage: text("error_message"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Bot configuration
+export const botConfig = pgTable("bot_config", {
+  id: serial("id").primaryKey(),
+  prefix: text("prefix").notNull().default(","),
+  disabledCommands: text("disabled_commands").array().default([]),
+  allowedChannels: text("allowed_channels").array().default([]),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: text("updated_by"),
+});
+
+// Admin users (beyond hardcoded defaults)
+export const adminUsers = pgTable("admin_users", {
+  id: serial("id").primaryKey(),
+  discordId: text("discord_id").notNull().unique(),
+  addedAt: timestamp("added_at").defaultNow(),
+  addedBy: text("added_by"),
+});
+
 export const insertLogSchema = createInsertSchema(logs).omit({ id: true, timestamp: true });
 export const insertWarnSchema = createInsertSchema(warns).omit({ id: true, timestamp: true });
 export const insertLfmSchema = createInsertSchema(lfmConnections).omit({ id: true, timestamp: true });
+export const insertBotStatusSchema = createInsertSchema(botStatus).omit({ id: true, updatedAt: true });
+export const insertBotConfigSchema = createInsertSchema(botConfig).omit({ id: true, updatedAt: true });
+export const insertAdminUserSchema = createInsertSchema(adminUsers).omit({ id: true, addedAt: true });
 
 export type Log = typeof logs.$inferSelect;
 export type InsertLog = z.infer<typeof insertLogSchema>;
@@ -34,3 +88,13 @@ export type Warn = typeof warns.$inferSelect;
 export type InsertWarn = z.infer<typeof insertWarnSchema>;
 export type LfmConnection = typeof lfmConnections.$inferSelect;
 export type InsertLfmConnection = z.infer<typeof insertLfmSchema>;
+export type BotStatus = typeof botStatus.$inferSelect;
+export type InsertBotStatus = z.infer<typeof insertBotStatusSchema>;
+export type BotConfig = typeof botConfig.$inferSelect;
+export type InsertBotConfig = z.infer<typeof insertBotConfigSchema>;
+export type AdminUser = typeof adminUsers.$inferSelect;
+export type InsertAdminUser = z.infer<typeof insertAdminUserSchema>;
+
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;

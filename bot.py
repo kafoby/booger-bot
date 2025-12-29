@@ -3,19 +3,17 @@ import os
 import aiohttp
 import random
 import urllib.parse
-import requests
 import spotipy
 import yt_dlp
 from spotipy.oauth2 import SpotifyClientCredentials
 import asyncio
 from discord import app_commands
 from datetime import timedelta
-from discord.ext import commands
-from keep_alive import keep_alive
+from discord.ext import commands, tasks
 import re
 from petpetgif import petpet
 import io
-keep_alive()
+import time
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 GITHUB_TOKEN = "***REMOVED***"
@@ -25,10 +23,25 @@ LASTFM_API_KEY = os.getenv('LASTFM_API_KEY')
 API_URL = 'http://127.0.0.1:5000/api/logs'
 WARNS_URL = 'http://127.0.0.1:5000/api/warns'
 LFM_URL = 'http://127.0.0.1:5000/api/lfm'
+HEARTBEAT_URL = 'http://127.0.0.1:5000/api/bot/heartbeat'
+CONFIG_URL = 'http://127.0.0.1:5000/api/bot/config'
+
+# Bot start time for uptime tracking
+bot_start_time = None
+
+# Dynamic bot configuration (fetched from API)
+bot_config = {
+    "prefix": ",",
+    "disabledCommands": [],
+    "allowedChannels": [1452216636819112010, 971303412849332226]
+}
+
+# Legacy constant for backwards compatibility
 ALLOWED_CHANNELS = [
     1452216636819112010,  #bot testing
+    971303412849332226
 ]
-
+# making this comment to save the state of the bot before i make a thousand changes lol -kfb
 print(f"Token available: {bool(TOKEN)}")
 print(f"Token value (first 20 chars): {TOKEN[:20] if TOKEN else 'None'}")
 
@@ -43,39 +56,117 @@ tree = bot.tree
 
 print("Discord bot initialized")
 
+
 async def log_to_server(message, level="info"):
     """Send log to the web server API"""
     try:
         async with aiohttp.ClientSession() as session:
-            payload = {
-                "message": message,
-                "level": level
-            }
+            payload = {"message": message, "level": level}
             async with session.post(API_URL, json=payload) as response:
                 if response.status != 201:
                     print(f"Failed to log to server: {response.status}")
     except Exception as e:
         print(f"Error logging to server: {e}")
 
+
+def get_uptime():
+    """Calculate bot uptime as a human-readable string"""
+    if bot_start_time is None:
+        return "0s"
+    elapsed = time.time() - bot_start_time
+    days = int(elapsed // 86400)
+    hours = int((elapsed % 86400) // 3600)
+    minutes = int((elapsed % 3600) // 60)
+    if days > 0:
+        return f"{days}d {hours}h {minutes}m"
+    elif hours > 0:
+        return f"{hours}h {minutes}m"
+    else:
+        return f"{minutes}m"
+
+
+@tasks.loop(seconds=30)
+async def send_heartbeat():
+    """Send heartbeat to the web server API every 30 seconds"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "status": "online",
+                "uptime": get_uptime()
+            }
+            async with session.post(HEARTBEAT_URL, json=payload) as response:
+                if response.status != 200:
+                    print(f"Heartbeat failed: {response.status}")
+    except Exception as e:
+        print(f"Heartbeat error: {e}")
+
+
+@send_heartbeat.before_loop
+async def before_heartbeat():
+    await bot.wait_until_ready()
+
+
+@tasks.loop(minutes=5)
+async def fetch_config():
+    """Fetch bot configuration from the web server API"""
+    global bot_config
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(CONFIG_URL, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    config = await response.json()
+                    bot_config = {
+                        "prefix": config.get("prefix", ","),
+                        "disabledCommands": config.get("disabledCommands") or [],
+                        "allowedChannels": [int(c) for c in (config.get("allowedChannels") or [])] if config.get("allowedChannels") else []
+                    }
+                    print(f"Config updated: prefix={bot_config['prefix']}, disabled={bot_config['disabledCommands']}")
+                else:
+                    print(f"Config fetch failed: {response.status}")
+    except Exception as e:
+        print(f"Config fetch error: {e}")
+
+
+@fetch_config.before_loop
+async def before_fetch_config():
+    await bot.wait_until_ready()
+
+
 @bot.event
 async def setup_hook():
     await tree.sync()
     await log_to_server("Slash commands synced")
 
+
 @bot.event
 async def on_ready():
+    global bot_start_time
+    bot_start_time = time.time()
+
     msg = f'{bot.user} has connected to Discord!'
     print(msg)
     await log_to_server(msg, "info")
+
+    # Start background tasks
+    if not send_heartbeat.is_running():
+        send_heartbeat.start()
+    if not fetch_config.is_running():
+        fetch_config.start()
+
+    # Fetch config immediately on startup
+    await fetch_config()
 
     channel = bot.get_channel(1452216636819112010)
     print(f"Channel object: {channel}")
     if channel:
         try:
             if isinstance(channel, discord.TextChannel):
-                await channel.send(f"clanker is up and running on replit, [and why he so eepy](https://tenor.com/view/sleepy-cat-baby-cat-coffee-cofffee-cat-sleeping-cat-gif-11793912039839338151)")
+                await channel.send(
+                    "clanker is up and running on replit, [and why he so eepy](https://tenor.com/view/sleepy-cat-baby-cat-coffee-cofffee-cat-sleeping-cat-gif-11793912039839338151)"
+                )
                 print("Message sent successfully!")
-                await log_to_server(f"Sent boot message to channel {channel}", "info")
+                await log_to_server(f"Sent boot message to channel {channel}",
+                                    "info")
             else:
                 print("Failed to send boot message")
         except Exception as e:
@@ -92,23 +183,39 @@ async def on_ready():
         print(f"Slash command sync failed: {e}")
         await log_to_server(f"Slash command sync failed: {e}", "error")
 
+
 @bot.event
 async def on_message(message):
 
     if message.author == bot.user:
         return
 
-    if message.channel.id not in ALLOWED_CHANNELS:
+    # Use dynamic config for allowed channels, fallback to legacy constant
+    allowed_channels = bot_config.get("allowedChannels", []) or ALLOWED_CHANNELS
+    if allowed_channels and message.channel.id not in allowed_channels:
         print(f"Ignored message in non-allowed channel: {message.content}")
         return
+
+    # Check if command is disabled
+    content = message.content
+    prefix = bot_config.get("prefix", ",")
+    if content.startswith(prefix):
+        command_name = content[len(prefix):].split()[0].lower() if content[len(prefix):].split() else ""
+        disabled_commands = bot_config.get("disabledCommands", []) or []
+        if command_name in disabled_commands:
+            await message.channel.send(f"The `{command_name}` command is currently disabled.")
+            return
 
     msg = f"Received message from {message.author}: {message.content}"
     print(msg)
     await log_to_server(msg, "info")
 
     if message.content.startswith(',rapeon'):
-        if message.author.id not in [934443300520345631, 954606816820613160]:
-            await message.channel.send("You are not allowed to use this command.")
+        if message.author.id not in [
+                934443300520345631, 954606816820613160, 395651363985555457
+        ]:
+            await message.channel.send(
+                "You are not allowed to use this command.")
             return
 
         bot.rape_enabled = True
@@ -116,21 +223,29 @@ async def on_message(message):
         return
 
     if message.content.startswith(',rapeoff'):
-        if message.author.id not in [934443300520345631, 954606816820613160]:
-            await message.channel.send("You are not allowed to use this command.")
+        if message.author.id not in [
+                934443300520345631, 954606816820613160, 395651363985555457
+        ]:
+            await message.channel.send(
+                "You are not allowed to use this command.")
             return
 
         bot.rape_enabled = False
-        await message.channel.send("Rape mode OFF <a:cr_asad:1166759175217487902>")
+        await message.channel.send(
+            "Rape mode OFF <a:cr_asad:1166759175217487902>")
         return
 
     if message.content.startswith(',rape '):
-        if message.author.id not in [934443300520345631, 954606816820613160]:
-            await message.channel.send("You are not allowed to use this command.")
+        if message.author.id not in [
+                934443300520345631, 954606816820613160, 395651363985555457
+        ]:
+            await message.channel.send(
+                "You are not allowed to use this command.")
             return
 
         if not getattr(bot, 'rape_enabled', False):
-            await message.channel.send("The `rape` command is currently disabled.")
+            await message.channel.send(
+                "The `rape` command is currently disabled.")
             return
 
         try:
@@ -143,7 +258,11 @@ async def on_message(message):
 
             async with aiohttp.ClientSession() as session:
 
-                search_queries = ["rape hentai gif", "rape hentai animated", "yuri rape gif", "femboy rape hentai", "cat girl rape hentai", "ebony rape hentai"]
+                search_queries = [
+                    "rape hentai gif", "rape hentai animated", "yuri rape gif",
+                    "femboy rape hentai", "cat girl rape hentai",
+                    "ebony rape hentai"
+                ]
                 search_query = random.choice(search_queries)
 
                 search_params = {
@@ -151,19 +270,24 @@ async def on_message(message):
                     "cx": CSE_ID,
                     "q": search_query,
                     "searchType": "image",
-                    "num": random.randint(1, 10),  
+                    "num": random.randint(1, 10),
                     "start": random.randint(1, 100)
                 }
-                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                async with session.get(
+                        "https://www.googleapis.com/customsearch/v1",
+                        params=search_params,
+                        timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status != 200:
                         await message.channel.send('Error fetching rape image')
-                        await log_to_server(f"Google API error: {resp.status}", "error")
+                        await log_to_server(f"Google API error: {resp.status}",
+                                            "error")
                         return
 
                     data = await resp.json()
 
                     if 'items' not in data or not data['items']:
-                        await message.channel.send('Could not find rape images')
+                        await message.channel.send('Could not find rape images'
+                                                   )
                         return
 
                     random_result = random.choice(data['items'])
@@ -175,12 +299,13 @@ async def on_message(message):
 
                     embed = discord.Embed(
                         title=f"{author.name} raped {target_user.name}",
-                        color=discord.Color.from_rgb(255, 192, 203)
-                    )
+                        color=discord.Color.from_rgb(255, 192, 203))
                     embed.set_image(url=image_url)
 
                     await message.channel.send(embed=embed)
-                    await log_to_server(f"{author} raped {target_user} via ,rape command", "info")
+                    await log_to_server(
+                        f"{author} raped {target_user} via ,rape command",
+                        "info")
                     return
         except Exception as e:
             print(f"Error with ,rape command: {e}")
@@ -191,7 +316,9 @@ async def on_message(message):
         try:
             parts = message.content.split(maxsplit=2)
             if len(parts) < 3:
-                await message.channel.send('Usage: ,warn @user <reason>\nExample: ,warn @user spamming')
+                await message.channel.send(
+                    'Usage: ,warn @user <reason>\nExample: ,warn @user spamming'
+                )
                 return
 
             if not message.mentions:
@@ -209,10 +336,14 @@ async def on_message(message):
                 }
                 async with session.post(WARNS_URL, json=payload) as response:
                     if response.status == 201:
-                        await message.channel.send(f'{target_user.mention} has been warned for: {reason}')
-                        await log_to_server(f"Warned {target_user} for: {reason}", "info")
+                        await message.channel.send(
+                            f'{target_user.mention} has been warned for: {reason}'
+                        )
+                        await log_to_server(
+                            f"Warned {target_user} for: {reason}", "info")
                     else:
-                        await message.channel.send('Error: Failed to save warning')
+                        await message.channel.send(
+                            'Error: Failed to save warning')
         except Exception as e:
             print(f"Error warning user: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -227,9 +358,14 @@ async def on_message(message):
 
                         if message.mentions:
                             target_user = message.mentions[0]
-                            warns = [w for w in warns if w['userId'] == str(target_user.id)]
+                            warns = [
+                                w for w in warns
+                                if w['userId'] == str(target_user.id)
+                            ]
                             if not warns:
-                                await message.channel.send(f'No warns found for {target_user.mention}')
+                                await message.channel.send(
+                                    f'No warns found for {target_user.mention}'
+                                )
                                 return
                             title = f'Warns for {target_user.name}'
                         else:
@@ -238,19 +374,23 @@ async def on_message(message):
                                 return
                             title = 'All Warns'
 
-                        embed = discord.Embed(title=title, color=discord.Color.purple())
+                        embed = discord.Embed(title=title,
+                                              color=discord.Color.purple())
 
                         for warn in warns:
                             embed.add_field(
-                                name=f"{warn['userName']} (ID: {warn['userId']})",
-                                value=f"**Reason:** {warn['reason']}\n**Date:** {warn['timestamp'][:10]}",
-                                inline=False
-                            )
+                                name=
+                                f"{warn['userName']} (ID: {warn['userId']})",
+                                value=
+                                f"**Reason:** {warn['reason']}\n**Date:** {warn['timestamp'][:10]}",
+                                inline=False)
 
                         await message.channel.send(embed=embed)
-                        await log_to_server(f"Viewed warns in {message.channel}", "info")
+                        await log_to_server(
+                            f"Viewed warns in {message.channel}", "info")
                     else:
-                        await message.channel.send('Error: Could not fetch warns')
+                        await message.channel.send(
+                            'Error: Could not fetch warns')
         except Exception as e:
             print(f"Error fetching warns: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -264,7 +404,9 @@ async def on_message(message):
                 return
 
             text_to_say = text_to_say.replace('<#', '').replace('>', '')
-            text_to_say = text_to_say.replace('<@', '').replace('!', '').replace('>', '')
+            text_to_say = text_to_say.replace('<@',
+                                              '').replace('!',
+                                                          '').replace('>', '')
 
             try:
                 await message.delete()
@@ -273,7 +415,8 @@ async def on_message(message):
                 pass
 
             await message.channel.send(text_to_say)
-            await log_to_server(f"Bot said: {text_to_say} (via ,say command)", "info")
+            await log_to_server(f"Bot said: {text_to_say} (via ,say command)",
+                                "info")
         except Exception as e:
             print(f"Error with ,say command: {e}")
             await log_to_server(f"Error with ,say command: {e}", "error")
@@ -281,15 +424,21 @@ async def on_message(message):
     if message.content.startswith(',cat'):
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get('https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1') as response:
+                async with session.get(
+                        'https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1'
+                ) as response:
                     if response.status == 200:
                         data = await response.json()
                         if data and len(data) > 0:
                             cat_url = data[0]['url']
-                            embed = discord.Embed(title="Here's a cat for you!", color=discord.Color.purple())
+                            embed = discord.Embed(
+                                title="Here's a cat for you!",
+                                color=discord.Color.purple())
                             embed.set_image(url=cat_url)
                             await message.channel.send(embed=embed)
-                            await log_to_server(f"Sent cat gif to {message.channel} via ,cat command", "info")
+                            await log_to_server(
+                                f"Sent cat gif to {message.channel} via ,cat command",
+                                "info")
         except Exception as e:
             print(f"Error fetching cat gif: {e}")
             await log_to_server(f"Error fetching cat gif: {e}", "error")
@@ -297,15 +446,21 @@ async def on_message(message):
     if message.content.startswith(',dog'):
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get('https://random.dog/woof.json?include=gif', timeout=aiohttp.ClientTimeout(total=5)) as response:
+                async with session.get(
+                        'https://random.dog/woof.json?include=gif',
+                        timeout=aiohttp.ClientTimeout(total=5)) as response:
                     if response.status == 200:
                         data = await response.json()
                         dog_url = data.get('url')
                         if dog_url:
-                            embed = discord.Embed(title="Here's a dog for you!", color=discord.Color.purple())
+                            embed = discord.Embed(
+                                title="Here's a dog for you!",
+                                color=discord.Color.purple())
                             embed.set_image(url=dog_url)
                             await message.channel.send(embed=embed)
-                            await log_to_server(f"Sent dog gif to {message.channel} via ,dog command", "info")
+                            await log_to_server(
+                                f"Sent dog gif to {message.channel} via ,dog command",
+                                "info")
         except Exception as e:
             print(f"Error fetching dog gif: {e}")
             await log_to_server(f"Error fetching dog gif: {e}", "error")
@@ -319,17 +474,17 @@ async def on_message(message):
             target_user = message.mentions[0]
             gay_percentage = random.randint(0, 100)
 
-            embed = discord.Embed(
-                title=f"{target_user.name} Gay Meter",
-                description=f"{gay_percentage}% gay",
-                color=discord.Color.purple()
-            )
+            embed = discord.Embed(title=f"{target_user.name} Gay Meter",
+                                  description=f"{gay_percentage}% gay",
+                                  color=discord.Color.purple())
 
             if target_user.avatar:
                 embed.set_thumbnail(url=target_user.avatar.url)
 
             await message.channel.send(embed=embed)
-            await log_to_server(f"Sent gay meter for {target_user} ({gay_percentage}%) via ,gay command", "info")
+            await log_to_server(
+                f"Sent gay meter for {target_user} ({gay_percentage}%) via ,gay command",
+                "info")
         except Exception as e:
             print(f"Error with ,gay command: {e}")
             await log_to_server(f"Error with ,gay command: {e}", "error")
@@ -351,12 +506,12 @@ async def on_message(message):
 
             embed = discord.Embed(
                 title=f"{author.name} kissed {target_user.name}",
-                color=discord.Color.purple()
-            )
+                color=discord.Color.purple())
             embed.set_image(url=gif_url)
 
             await message.channel.send(embed=embed)
-            await log_to_server(f"{author} kissed {target_user} via ,kiss command", "info")
+            await log_to_server(
+                f"{author} kissed {target_user} via ,kiss command", "info")
         except Exception as e:
             print(f"Error with ,kiss command: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -372,46 +527,56 @@ async def on_message(message):
             author = message.author
 
             async with aiohttp.ClientSession() as session:
-                
-                search_queries = ["anime girl slap gif", "anime girl slap animated", "yuri slap gif", "yuri slap animated", "anime cat girl slap gif", "anime cat girl slap animated"]
+
+                search_queries = [
+                    "anime girl slap gif", "anime girl slap animated",
+                    "yuri slap gif", "yuri slap animated",
+                    "anime cat girl slap gif", "anime cat girl slap animated"
+                ]
                 search_query = random.choice(search_queries)
-                
+
                 search_params = {
                     "key": GOOGLE_API_KEY,
                     "cx": CSE_ID,
                     "q": search_query,
                     "searchType": "image",
-                    "num": random.randint(1, 10),  
+                    "num": random.randint(1, 10),
                     "start": random.randint(1, 100)
                 }
-                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                async with session.get(
+                        "https://www.googleapis.com/customsearch/v1",
+                        params=search_params,
+                        timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status != 200:
-                        await message.channel.send('Error fetching slap images')
-                        await log_to_server(f"Google API error: {resp.status}", "error")
+                        await message.channel.send('Error fetching slap images'
+                                                   )
+                        await log_to_server(f"Google API error: {resp.status}",
+                                            "error")
                         return
-                    
+
                     data = await resp.json()
-                    
+
                     if 'items' not in data or not data['items']:
-                        await message.channel.send('Could not find slap images')
+                        await message.channel.send('Could not find slap images'
+                                                   )
                         return
-                    
-                    
+
                     random_result = random.choice(data['items'])
                     image_url = random_result.get('link')
-                    
+
                     if not image_url:
                         await message.channel.send('Could not get image URL')
                         return
-                    
+
                     embed = discord.Embed(
                         title=f"{author.name} slapped {target_user.name}",
-                        color=discord.Color.purple()
-                    )
+                        color=discord.Color.purple())
                     embed.set_image(url=image_url)
-                    
+
                     await message.channel.send(embed=embed)
-                    await log_to_server(f"{author} slapped {target_user} via ,slap command", "info")
+                    await log_to_server(
+                        f"{author} slapped {target_user} via ,slap command",
+                        "info")
         except Exception as e:
             print(f"Error with ,slap command: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -420,7 +585,10 @@ async def on_message(message):
     if message.content.startswith(',crocodile'):
         try:
             async with aiohttp.ClientSession() as session:
-                search_queries = ["crocodile gif", "crocodile animated", "cute crocodile", "crocodile meme", "crocodile"]
+                search_queries = [
+                    "crocodile gif", "crocodile animated", "cute crocodile",
+                    "crocodile meme", "crocodile"
+                ]
                 search_query = random.choice(search_queries)
 
                 search_params = {
@@ -432,15 +600,20 @@ async def on_message(message):
                     "start": random.randint(1, 50)
                 }
 
-                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                async with session.get(
+                        "https://www.googleapis.com/customsearch/v1",
+                        params=search_params,
+                        timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     if resp.status != 200:
-                        await message.channel.send("Error fetching crocodile image")
+                        await message.channel.send(
+                            "Error fetching crocodile image")
                         return
 
                     data = await resp.json()
 
                     if 'items' not in data or not data['items']:
-                        await message.channel.send("Couldn't find any crocodiles right now")
+                        await message.channel.send(
+                            "Couldn't find any crocodiles right now")
                         return
 
                     random_result = random.choice(data['items'])
@@ -450,10 +623,8 @@ async def on_message(message):
                         await message.channel.send("Couldn't get image URL")
                         return
 
-                    embed = discord.Embed(
-                        title="Here is a crocodile for you!",
-                        color=discord.Color.purple()
-                    )
+                    embed = discord.Embed(title="Here is a crocodile for you!",
+                                          color=discord.Color.purple())
                     embed.set_image(url=image_url)
 
                     await message.channel.send(embed=embed)
@@ -464,7 +635,10 @@ async def on_message(message):
     if message.content.startswith(',seal'):
         try:
             async with aiohttp.ClientSession() as session:
-                search_queries = ["baby harp seal", "harp seal pup", "baby seal gif", "harp seal pup gif"]
+                search_queries = [
+                    "baby harp seal", "harp seal pup", "baby seal gif",
+                    "harp seal pup gif"
+                ]
                 search_query = random.choice(search_queries)
 
                 search_params = {
@@ -476,7 +650,10 @@ async def on_message(message):
                     "start": random.randint(1, 50)
                 }
 
-                async with session.get("https://www.googleapis.com/customsearch/v1", params=search_params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                async with session.get(
+                        "https://www.googleapis.com/customsearch/v1",
+                        params=search_params,
+                        timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     if resp.status != 200:
                         await message.channel.send("Error fetching seal image")
                         return
@@ -484,7 +661,8 @@ async def on_message(message):
                     data = await resp.json()
 
                     if 'items' not in data or not data['items']:
-                        await message.channel.send("Couldn't find any seals right now")
+                        await message.channel.send(
+                            "Couldn't find any seals right now")
                         return
 
                     random_result = random.choice(data['items'])
@@ -496,12 +674,13 @@ async def on_message(message):
 
                     embed = discord.Embed(
                         title="Here is a baby harp seal for you!",
-                        color=discord.Color.purple()
-                    )
+                        color=discord.Color.purple())
                     embed.set_image(url=image_url)
 
                     await message.channel.send(embed=embed)
-                    await log_to_server(f"Sent seal image to {message.channel} via ,seal command", "info")
+                    await log_to_server(
+                        f"Sent seal image to {message.channel} via ,seal command",
+                        "info")
         except Exception as e:
             print(f"Error with ,seal command: {e}")
             await message.channel.send(f"Error: {str(e)}")
@@ -516,7 +695,8 @@ async def on_message(message):
             target = message.mentions[0]
             author = message.author
 
-            avatar_url = target.display_avatar.with_format("png").with_size(512).url
+            avatar_url = target.display_avatar.with_format("png").with_size(
+                512).url
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(avatar_url) as resp:
@@ -528,16 +708,13 @@ async def on_message(message):
             petpet.make(source, dest)
             dest.seek(0)
 
-            embed = discord.Embed(
-                title=f"{author.name} pets {target.name}",
-                color=0x9b59b6
-            )
+            embed = discord.Embed(title=f"{author.name} pets {target.name}",
+                                  color=0x9b59b6)
             embed.set_image(url="attachment://pet.gif")
 
-            await message.channel.send(
-                embed=embed,
-                file=discord.File(dest, filename="pet.gif")
-            )
+            await message.channel.send(embed=embed,
+                                       file=discord.File(dest,
+                                                         filename="pet.gif"))
 
         except Exception as e:
             await message.channel.send(str(e))
@@ -550,7 +727,8 @@ async def on_message(message):
                 return
 
             if not message.mentions:
-                await message.channel.send('Please mention a user to send a DM to')
+                await message.channel.send(
+                    'Please mention a user to send a DM to')
                 return
 
             target_user = message.mentions[0]
@@ -564,9 +742,12 @@ async def on_message(message):
 
             try:
                 await target_user.send(text_to_send)
-                await log_to_server(f"Sent DM to {target_user}: {text_to_send}", "info")
+                await log_to_server(
+                    f"Sent DM to {target_user}: {text_to_send}", "info")
             except discord.Forbidden:
-                await log_to_server(f"Failed to send DM to {target_user} - DMs disabled", "error")
+                await log_to_server(
+                    f"Failed to send DM to {target_user} - DMs disabled",
+                    "error")
         except Exception as e:
             print(f"Error with ,say2 command: {e}")
             await log_to_server(f"Error with ,say2 command: {e}", "error")
@@ -575,7 +756,9 @@ async def on_message(message):
         try:
             parts = message.content.split()
             if len(parts) < 3:
-                await message.channel.send('Usage: ,timeout @user <duration>\nExample: ,timeout @user 10m (or 30s, 1h)')
+                await message.channel.send(
+                    'Usage: ,timeout @user <duration>\nExample: ,timeout @user 10m (or 30s, 1h)'
+                )
                 return
 
             if not message.mentions:
@@ -585,8 +768,10 @@ async def on_message(message):
             target_user = message.mentions[0]
             duration_str = parts[2]
 
-            duration_value = int(''.join(c for c in duration_str if c.isdigit()))
-            duration_unit = ''.join(c for c in duration_str if c.isalpha()).lower()
+            duration_value = int(''.join(c for c in duration_str
+                                         if c.isdigit()))
+            duration_unit = ''.join(c for c in duration_str
+                                    if c.isalpha()).lower()
 
             if duration_unit == 'm':
                 timeout_duration = timedelta(minutes=duration_value)
@@ -595,12 +780,16 @@ async def on_message(message):
             elif duration_unit == 'h':
                 timeout_duration = timedelta(hours=duration_value)
             else:
-                await message.channel.send('Invalid duration. Use format: 10m, 30s, or 1h')
+                await message.channel.send(
+                    'Invalid duration. Use format: 10m, 30s, or 1h')
                 return
 
-            await target_user.timeout(timeout_duration, reason="Timed out by bot command")
-            await message.channel.send(f'{target_user.mention} has been timed out for {duration_str}')
-            await log_to_server(f"Timed out {target_user} for {duration_str}", "info")
+            await target_user.timeout(timeout_duration,
+                                      reason="Timed out by bot command")
+            await message.channel.send(
+                f'{target_user.mention} has been timed out for {duration_str}')
+            await log_to_server(f"Timed out {target_user} for {duration_str}",
+                                "info")
         except Exception as e:
             print(f"Error timing out user: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -625,31 +814,38 @@ async def on_message(message):
                     "num": 10
                 }
 
-                async with session.get("https://www.googleapis.com/customsearch/v1", params=params, timeout=30) as resp:
+                async with session.get(
+                        "https://www.googleapis.com/customsearch/v1",
+                        params=params,
+                        timeout=30) as resp:
                     if resp.status != 200:
-                        await message.channel.send("Error fetching Diddy GIFs.")
+                        await message.channel.send("Error fetching Diddy GIFs."
+                                                   )
                         return
                     data = await resp.json()
 
-            gif_items = [item["link"] for item in data.get("items", []) if item.get("mime") == "image/gif"]
+            gif_items = [
+                item["link"] for item in data.get("items", [])
+                if item.get("mime") == "image/gif"
+            ]
 
             if not gif_items:
-                await message.channel.send("Couldn't find any Diddy GIFs right now.")
+                await message.channel.send(
+                    "Couldn't find any Diddy GIFs right now.")
                 return
 
             gif_url = random.choice(gif_items)
 
-            embed = discord.Embed(
-                title=f"{author.name} diddled {target.name}",
-                color=discord.Color.purple()
-            )
+            embed = discord.Embed(title=f"{author.name} diddled {target.name}",
+                                  color=discord.Color.purple())
             embed.set_image(url=gif_url)
 
             await message.channel.send(embed=embed)
 
         except Exception as e:
             print(f"Error with ,diddle command: {e}")
-            await message.channel.send("Something went wrong while fetching the GIF.")
+            await message.channel.send(
+                "Something went wrong while fetching the GIF.")
 
     if message.content.startswith(',fmset '):
         try:
@@ -663,12 +859,19 @@ async def on_message(message):
                     "discordUserId": str(message.author.id),
                     "lastfmUsername": lfm_username
                 }
-                async with session.post(LFM_URL, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                async with session.post(
+                        LFM_URL,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=10)) as response:
                     if response.status in [200, 201]:
-                        await message.channel.send(f'Last.fm account set to `{lfm_username}`')
-                        await log_to_server(f"Set Last.fm account for {message.author} to {lfm_username}", "info")
+                        await message.channel.send(
+                            f'Last.fm account set to `{lfm_username}`')
+                        await log_to_server(
+                            f"Set Last.fm account for {message.author} to {lfm_username}",
+                            "info")
                     else:
-                        await message.channel.send('Error setting Last.fm account')
+                        await message.channel.send(
+                            'Error setting Last.fm account')
         except Exception as e:
             print(f"Error with ,fmset command: {e}")
             await log_to_server(f"Error with ,fmset command: {e}", "error")
@@ -679,23 +882,32 @@ async def on_message(message):
                 await message.channel.send('Last.fm API key not configured')
                 return
 
-            target_user = message.mentions[0] if message.mentions else message.author
+            target_user = message.mentions[
+                0] if message.mentions else message.author
 
             async with aiohttp.ClientSession() as session:
-                print(f"Fetching LFM data for user {target_user.id} from {LFM_URL}/{target_user.id}")
-                async with session.get(f'{LFM_URL}/{target_user.id}', timeout=aiohttp.ClientTimeout(total=10)) as response:
+                print(
+                    f"Fetching LFM data for user {target_user.id} from {LFM_URL}/{target_user.id}"
+                )
+                async with session.get(
+                        f'{LFM_URL}/{target_user.id}',
+                        timeout=aiohttp.ClientTimeout(total=10)) as response:
                     print(f"LFM response status: {response.status}")
                     if response.status != 200:
                         error_text = await response.text()
                         print(f"LFM error response: {error_text}")
-                        await message.channel.send(f'{target_user.mention} has not set their Last.fm account. Use `,fmset <username>`')
+                        await message.channel.send(
+                            f'{target_user.mention} has not set their Last.fm account. Use `,fmset <username>`'
+                        )
                         return
 
                     connection = await response.json()
                     print(f"LFM connection data: {connection}")
                     lfm_username = connection.get('lastfmUsername')
                     if not lfm_username:
-                        await message.channel.send(f'{target_user.mention} has not set their Last.fm account. Use `,fmset <username>`')
+                        await message.channel.send(
+                            f'{target_user.mention} has not set their Last.fm account. Use `,fmset <username>`'
+                        )
                         return
 
                 lfm_params = {
@@ -705,15 +917,21 @@ async def on_message(message):
                     'format': 'json',
                     'limit': '1'
                 }
-                async with session.get('https://ws.audioscrobbler.com/2.0/', params=lfm_params, timeout=aiohttp.ClientTimeout(total=10)) as lfm_response:
+                async with session.get('https://ws.audioscrobbler.com/2.0/',
+                                       params=lfm_params,
+                                       timeout=aiohttp.ClientTimeout(
+                                           total=10)) as lfm_response:
                     if lfm_response.status != 200:
-                        await message.channel.send('Error fetching Last.fm data')
+                        await message.channel.send(
+                            'Error fetching Last.fm data')
                         return
 
                     lfm_data = await lfm_response.json()
 
-                    if 'recenttracks' not in lfm_data or not lfm_data['recenttracks']['track']:
-                        await message.channel.send(f'{target_user.mention} has no recent tracks')
+                    if 'recenttracks' not in lfm_data or not lfm_data[
+                            'recenttracks']['track']:
+                        await message.channel.send(
+                            f'{target_user.mention} has no recent tracks')
                         return
 
                     track = lfm_data['recenttracks']['track']
@@ -721,7 +939,8 @@ async def on_message(message):
                         track = track[0]
 
                     track_name = track.get('name', 'Unknown')
-                    artist_name = track['artist']['#text'] if isinstance(track['artist'], dict) else track['artist']
+                    artist_name = track['artist']['#text'] if isinstance(
+                        track['artist'], dict) else track['artist']
                     cover_url = None
                     if 'image' in track:
                         for img in track['image']:
@@ -737,29 +956,39 @@ async def on_message(message):
                     }
                     scrobbles = "Unknown"
                     try:
-                        async with session.get('https://ws.audioscrobbler.com/2.0/', params=user_params, timeout=aiohttp.ClientTimeout(total=10)) as user_response:
+                        async with session.get(
+                                'https://ws.audioscrobbler.com/2.0/',
+                                params=user_params,
+                                timeout=aiohttp.ClientTimeout(
+                                    total=10)) as user_response:
                             if user_response.status == 200:
                                 user_data = await user_response.json()
                                 if 'user' in user_data:
-                                    scrobbles = user_data['user'].get('playcount', 'Unknown')
+                                    scrobbles = user_data['user'].get(
+                                        'playcount', 'Unknown')
                     except Exception as e:
-                        await log_to_server(f"Failed to fetch scrobble count: {e}", "warn")
+                        await log_to_server(
+                            f"Failed to fetch scrobble count: {e}", "warn")
 
                     album_name = "Unknown"
                     if 'album' in track:
-                        album_name = track['album']['#text'] if isinstance(track['album'], dict) else track['album']
+                        album_name = track['album']['#text'] if isinstance(
+                            track['album'], dict) else track['album']
 
                     track_url = f"https://www.last.fm/music/{urllib.parse.quote(artist_name)}/+{urllib.parse.quote(track_name)}"
 
                     embed = discord.Embed(
-                        description=f"[**{track_name}**]({track_url})\n{artist_name} • {album_name}\n\n{scrobbles} total scrobbles",
-                        color=discord.Color.purple()
-                    )
+                        description=
+                        f"[**{track_name}**]({track_url})\n{artist_name} • {album_name}\n\n{scrobbles} total scrobbles",
+                        color=discord.Color.purple())
 
                     if target_user.avatar:
-                        embed.set_author(name=f"Now playing - {target_user.display_name}", icon_url=target_user.avatar.url)
+                        embed.set_author(
+                            name=f"Now playing - {target_user.display_name}",
+                            icon_url=target_user.avatar.url)
                     else:
-                        embed.set_author(name=f"Now playing - {target_user.display_name}")
+                        embed.set_author(
+                            name=f"Now playing - {target_user.display_name}")
 
                     if cover_url:
                         embed.set_thumbnail(url=cover_url)
@@ -773,7 +1002,9 @@ async def on_message(message):
                         await log_to_server(f"Failed to add reactions: {e}")
                         pass
 
-                    await log_to_server(f"Fetched Last.fm now playing for {target_user}: {track_name} by {artist_name}", "info")
+                    await log_to_server(
+                        f"Fetched Last.fm now playing for {target_user}: {track_name} by {artist_name}",
+                        "info")
         except Exception as e:
             print(f"Error with ,fm command: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -781,13 +1012,17 @@ async def on_message(message):
 
     if 'faggot' in message.content.lower():
         try:
-            await message.channel.send('https://cdn.discordapp.com/attachments/1279123313519624212/1316546100617805904/attachment-3.gif')
-            await log_to_server(f"Sent gif to {message.channel} in response to message: {message.content}", "info")
+            await message.channel.send(
+                'https://cdn.discordapp.com/attachments/1279123313519624212/1316546100617805904/attachment-3.gif'
+            )
+            await log_to_server(
+                f"Sent gif to {message.channel} in response to message: {message.content}",
+                "info")
         except Exception as e:
             print(f"Error sending gif: {e}")
             await log_to_server(f"Error sending gif: {e}", "error")
 
-    if any(word in message.content.lower() for word in ("hi", "hello", "hey", "wave")):
+    if re.search(r'\b(hi|hello|hey|wave)\b', message.content.lower()):
         try:
             await message.add_reaction('<a:wave:1166754943785500722>')
             await log_to_server(f"Reacted to {message.author} with wave")
@@ -795,7 +1030,9 @@ async def on_message(message):
             print(f"Error reacting to message: {e}")
             await log_to_server(f"Error reacting to message: {e}", "error")
 
-@tree.command(name="youtube", description="share youtube video with download options")
+
+@tree.command(name="youtube",
+              description="share youtube video with download options")
 @app_commands.describe(link="youtube url")
 async def youtube(interaction: discord.Interaction, link: str):
     await interaction.response.defer()
@@ -806,12 +1043,14 @@ async def youtube(interaction: discord.Interaction, link: str):
 
     await interaction.followup.send(f"[yt]({link})")
 
-    ss_download = link.replace("youtube.com", "ssyoutube.com").replace("youtu.be", "ssyoutube.com")
+    ss_download = link.replace("youtube.com", "ssyoutube.com").replace(
+        "youtu.be", "ssyoutube.com")
 
     embed = discord.Embed(color=0xFF0000)
     embed.description = f"[Download video (up to 720p)]({ss_download})\n[Upload downloaded video to catbox.moe for permanent share](https://catbox.moe/)"
 
     await interaction.followup.send(embed=embed)
+
 
 @tree.command(name="lumsearch", description="Search Google")
 @app_commands.describe(query="What do you want to search on Google?")
@@ -826,9 +1065,12 @@ async def search(interaction: discord.Interaction, query: str):
                 "q": query,
                 "num": 5
             }
-            async with session.get("https://www.googleapis.com/customsearch/v1", params=params) as resp:
+            async with session.get(
+                    "https://www.googleapis.com/customsearch/v1",
+                    params=params) as resp:
                 if resp.status != 200:
-                    await interaction.followup.send("Error contacting Google API.")
+                    await interaction.followup.send(
+                        "Error contacting Google API.")
                     return
                 data = await resp.json()
 
@@ -837,28 +1079,26 @@ async def search(interaction: discord.Interaction, query: str):
             await interaction.followup.send("No results found for your query.")
             return
 
-        embed = discord.Embed(
-            title="Google Results",
-            description=f"Top 5 results for: **{query}**",
-            color=discord.Color.purple()
-        )
+        embed = discord.Embed(title="Google Results",
+                              description=f"Top 5 results for: **{query}**",
+                              color=discord.Color.purple())
 
         for i, item in enumerate(items[:5], 1):
             title = item.get("title", "No title")
             link = item.get("link", "")
             snippet = item.get("snippet", "No description available.")
-            embed.add_field(
-                name=f"{i}. {title}",
-                value=f"[Link]({link})\n{snippet}",
-                inline=False
-            )
+            embed.add_field(name=f"{i}. {title}",
+                            value=f"[Link]({link})\n{snippet}",
+                            inline=False)
 
         await interaction.followup.send(embed=embed)
 
     except Exception as e:
         print(f"/lumsearch error: {e}")
-        await interaction.followup.send("Something went wrong while searching.")
-              
+        await interaction.followup.send("Something went wrong while searching."
+                                        )
+
+
 @tree.command(name="reel", description="embeds an insta reel of your choice")
 @app_commands.describe(link="reel url")
 async def reel(interaction: discord.Interaction, link: str):
@@ -868,30 +1108,37 @@ async def reel(interaction: discord.Interaction, link: str):
 
     await interaction.followup.send(f"[reel]({modified_link})")
 
+
 @tree.command(name="tiktok", description="embed tiktok url of your choice")
 @app_commands.describe(link="url")
 async def tiktok(interaction: discord.Interaction, link: str):
     await interaction.response.defer()
 
     # modified_link = (
-        # link.replace("vm.tiktok.com", "d.tnktok.com")
-        #     .replace("www.tiktok.com", "d.tnktok.com")
-        #     .replace("tiktok.com", "d.tnktok.com")
-        #     .replace("vt.tiktok.com", "d.tnktok.com")
+    # link.replace("vm.tiktok.com", "d.tnktok.com")
+    #     .replace("www.tiktok.com", "d.tnktok.com")
+    #     .replace("tiktok.com", "d.tnktok.com")
+    #     .replace("vt.tiktok.com", "d.tnktok.com")
     # )
     modified_link = re.sub(r"https://.*\.tiktok", "https://d.tnktok", link)
 
     await interaction.followup.send(f"[tiktok]({modified_link})")
 
+
 yt_dlp.utils.bug_reports_message = lambda: ''
 
+
 @tree.command(name="github", description="search stuff up on github")
-@app_commands.describe(query="what do you want to search?", type="repo (default), code, or user")
-async def github(interaction: discord.Interaction, query: str, type: str = "repo"):
+@app_commands.describe(query="what do you want to search?",
+                       type="repo (default), code, or user")
+async def github(interaction: discord.Interaction,
+                 query: str,
+                 type: str = "repo"):
     await interaction.response.defer()
 
     if type not in ["repo", "code", "user"]:
-        await interaction.followup.send("Type must be 'repo', 'code', or 'user'.")
+        await interaction.followup.send(
+            "Type must be 'repo', 'code', or 'user'.")
         return
 
     search_type = "repositories" if type == "repo" else "code" if type == "code" else "users"
@@ -904,9 +1151,12 @@ async def github(interaction: discord.Interaction, query: str, type: str = "repo
                 "Accept": "application/vnd.github.v3+json",
                 "Authorization": f"token {GITHUB_TOKEN}"
             }
-            async with session.get(url, params=params, headers=headers) as resp:
+            async with session.get(url, params=params,
+                                   headers=headers) as resp:
                 if resp.status != 200:
-                    await interaction.followup.send("Error contacting GitHub API (check token or rate limit).")
+                    await interaction.followup.send(
+                        "Error contacting GitHub API (check token or rate limit)."
+                    )
                     return
                 data = await resp.json()
 
@@ -923,33 +1173,29 @@ async def github(interaction: discord.Interaction, query: str, type: str = "repo
                 name = item["full_name"]
                 desc = item.get("description", "No description")
                 url = item["html_url"]
-                embed.add_field(
-                    name=f"{i}. {name}",
-                    value=f"{desc}\n[View on GitHub]({url})",
-                    inline=False
-                )
+                embed.add_field(name=f"{i}. {name}",
+                                value=f"{desc}\n[View on GitHub]({url})",
+                                inline=False)
             elif type == "code":
                 repo = item["repository"]["full_name"]
                 path = item["path"]
                 url = item["html_url"]
-                embed.add_field(
-                    name=f"{i}. {repo} → {path}",
-                    value=f"[View code]({url})",
-                    inline=False
-                )
+                embed.add_field(name=f"{i}. {repo} → {path}",
+                                value=f"[View code]({url})",
+                                inline=False)
             elif type == "user":
                 login = item["login"]
                 url = item["html_url"]
-                embed.add_field(
-                    name=f"{i}. @{login}",
-                    value=f"[View profile]({url})",
-                    inline=False
-                )
+                embed.add_field(name=f"{i}. @{login}",
+                                value=f"[View profile]({url})",
+                                inline=False)
 
         await interaction.followup.send(embed=embed)
 
     except Exception:
-        await interaction.followup.send("Something went wrong while searching GitHub.")
+        await interaction.followup.send(
+            "Something went wrong while searching GitHub.")
+
 
 @tree.command(name="stackoverflow", description="search on stack overflow")
 @app_commands.describe(query="what do you want to search?")
@@ -968,7 +1214,8 @@ async def so(interaction: discord.Interaction, query: str):
             }
             async with session.get(url, params=params) as resp:
                 if resp.status != 200:
-                    await interaction.followup.send("Error contacting Stack Exchange API.")
+                    await interaction.followup.send(
+                        "Error contacting Stack Exchange API.")
                     return
                 data = await resp.json()
 
@@ -987,15 +1234,17 @@ async def so(interaction: discord.Interaction, query: str):
             answers = item["answer_count"]
             answered = "✅" if item["is_answered"] else "❌"
             embed.add_field(
-                name=f"{i}. {title} ({votes} votes, {answers} answers {answered})",
+                name=
+                f"{i}. {title} ({votes} votes, {answers} answers {answered})",
                 value=f"[View question]({url})",
-                inline=False
-            )
+                inline=False)
 
         await interaction.followup.send(embed=embed)
 
     except Exception:
-        await interaction.followup.send("Something went wrong while searching Stack Overflow.")
+        await interaction.followup.send(
+            "Something went wrong while searching Stack Overflow.")
+
 
 @tree.command(name="askgpt", description="ask chatgpt a question")
 @app_commands.describe(question="Your question:")
@@ -1005,21 +1254,33 @@ async def askchatgpt(interaction: discord.Interaction, question: str):
     try:
         async with aiohttp.ClientSession() as session:
             headers = {
-                "Authorization": "Bearer YOUR_OPENAI_API_KEY",
+                "Authorization":
+                "Bearer YOUR_OPENAI_API_KEY",
                 "Content-Type": "application/json"
             }
             payload = {
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "system", "content": "You are ChatGPT, a helpful AI assistant that was made by lumiin."},
-                    {"role": "user", "content": question}
-                ],
-                "temperature": 0.7
+                "model":
+                "gpt-4o-mini",
+                "messages": [{
+                    "role":
+                    "system",
+                    "content":
+                    "You are ChatGPT, a helpful AI assistant that was made by lumiin."
+                }, {
+                    "role": "user",
+                    "content": question
+                }],
+                "temperature":
+                0.7
             }
 
-            async with session.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers) as resp:
+            async with session.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    json=payload,
+                    headers=headers) as resp:
                 if resp.status != 200:
-                    await interaction.followup.send("Error contacting OpenAI API.")
+                    await interaction.followup.send(
+                        "Error contacting OpenAI API.")
                     return
                 data = await resp.json()
 
@@ -1028,13 +1289,17 @@ async def askchatgpt(interaction: discord.Interaction, question: str):
         if len(answer) > 2000:
             answer = answer[:1997] + "..."
 
-        embed = discord.Embed(title="ChatGPT Answer", description=answer, color=0x9b59b6)
+        embed = discord.Embed(title="ChatGPT Answer",
+                              description=answer,
+                              color=0x9b59b6)
         embed.set_footer(text=f"Asked by {interaction.user.display_name}")
 
         await interaction.followup.send(embed=embed)
 
     except Exception:
-        await interaction.followup.send("Something went wrong while asking ChatGPT.")
+        await interaction.followup.send(
+            "Something went wrong while asking ChatGPT.")
+
 
 @tree.command(name="askgrok", description="ask grok something")
 @app_commands.describe(question="your question")
@@ -1044,19 +1309,26 @@ async def askgrok(interaction: discord.Interaction, question: str):
     try:
         async with aiohttp.ClientSession() as session:
             headers = {
-                "Authorization": "Bearer YOUR_XAI_API_KEY",
+                "Authorization":
+                "Bearer YOUR_XAI_API_KEY",
                 "Content-Type": "application/json"
             }
             payload = {
                 "model": "grok-4-1-fast",  # Updated model name
-                "messages": [{"role": "user", "content": question}],
+                "messages": [{
+                    "role": "user",
+                    "content": question
+                }],
                 "temperature": 0.8
             }
 
-            async with session.post("https://api.x.ai/v1/chat/completions", json=payload, headers=headers) as resp:
+            async with session.post("https://api.x.ai/v1/chat/completions",
+                                    json=payload,
+                                    headers=headers) as resp:
                 if resp.status != 200:
                     text = await resp.text()
-                    await interaction.followup.send(f"API error {resp.status}: {text}")
+                    await interaction.followup.send(
+                        f"API error {resp.status}: {text}")
                     return
                 data = await resp.json()
 
@@ -1072,6 +1344,7 @@ async def askgrok(interaction: discord.Interaction, question: str):
     except Exception as e:
         await interaction.followup.send(f"Error: {str(e)}")
 
+
 ytdl_format_options = {
     'format': 'bestaudio/best',
     'restrictfilenames': True,
@@ -1085,7 +1358,8 @@ ytdl_format_options = {
 }
 
 ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'before_options':
+    '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn'
 }
 
@@ -1094,14 +1368,12 @@ ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 SPOTIFY_CLIENT_ID = '9722662a89274a8c9915e07aae084544'
 SPOTIFY_CLIENT_SECRET = '***REMOVED***'
 
-sp = spotipy.Spotify(
-    auth_manager=SpotifyClientCredentials(
-        client_id=SPOTIFY_CLIENT_ID,
-        client_secret=SPOTIFY_CLIENT_SECRET
-    )
-)
+sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+    client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
+
 
 class YTDLSource(discord.PCMVolumeTransformer):
+
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
         self.data = data
@@ -1111,14 +1383,15 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_url(cls, url, *, loop, stream=True):
         data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(url, download=not stream)
-        )
+            None, lambda: ytdl.extract_info(url, download=not stream))
         if 'entries' in data:
             data = data['entries'][0]
         source = discord.FFmpegPCMAudio(data['url'], **ffmpeg_options)
         return cls(source, data=data)
 
-@tree.command(name="playspotify", description="Play a song from Spotify or YouTube")
+
+@tree.command(name="playspotify",
+              description="Play a song from Spotify or YouTube")
 @app_commands.describe(query="Spotify track link or song name")
 async def playspotify(interaction: discord.Interaction, query: str):
     await interaction.response.defer()
@@ -1152,12 +1425,14 @@ async def playspotify(interaction: discord.Interaction, query: str):
             if "spotify:track:" in query:
                 track_id = query.split("spotify:track:")[1].split("?")[0]
             elif "open.spotify.com/track/" in query:
-                track_id = query.split("open.spotify.com/track/")[1].split("?")[0]
-            
+                track_id = query.split("open.spotify.com/track/")[1].split(
+                    "?")[0]
+
             if not track_id:
-                await interaction.followup.send("Invalid Spotify track link format.")
+                await interaction.followup.send(
+                    "Invalid Spotify track link format.")
                 return
-            
+
             track = sp.track(track_id)
             search = f"{track['name']} {track['artists'][0]['name']}"
         except Exception as e:
@@ -1168,17 +1443,16 @@ async def playspotify(interaction: discord.Interaction, query: str):
         search = query
 
     try:
-        player = await YTDLSource.from_url(
-            search,
-            loop=interaction.client.loop,
-            stream=True
-        )
+        player = await YTDLSource.from_url(search,
+                                           loop=interaction.client.loop,
+                                           stream=True)
         if vc.is_playing() or vc.is_paused():
             vc.stop()
         vc.play(player)
         await interaction.followup.send(f"Now playing: **{player.title}**")
     except Exception as e:
         await interaction.followup.send(f"Playback error: {e}")
+
 
 @tree.command(name="stop", description="Stop music and disconnect")
 async def stop_music(interaction: discord.Interaction):
@@ -1199,6 +1473,30 @@ async def stop_music(interaction: discord.Interaction):
         await interaction.followup.send("Disconnected.")
     except Exception as e:
         await interaction.followup.send(f"Disconnect error: {e}")
+
+
+@tree.command(name="info", description="shows bot info and commands list")
+async def info(interaction: discord.Interaction):
+    await interaction.response.defer()
+
+    embed = discord.Embed(title="Bot Info", color=0x9b59b6)
+    embed.set_author(name=interaction.client.user.name,
+                     icon_url=interaction.client.user.display_avatar.url)
+    embed.description = "A retarded Discord bot made by lumiin4, forgor0x10 and kfb"
+    embed.add_field(
+        name="Commands List",
+        value=
+        "[View command list here](https://docs.google.com/document/d/12k-jomc8g4efri6MjKReGAae00r9WVJiBoFdwWnDujY/edit)",
+        inline=False)
+    embed.add_field(
+        name="Links",
+        value=
+        "[Bot Dashboard](https://ed842328-da25-41d0-a017-997bd0c48659-00-5a6gif8qp530.janeway.replit.dev/) | [UptimeBot](https://stats.uptimerobot.com/6neDK1LPEd/)",
+        inline=False)
+    embed.set_footer(text="Made with love ❤️")
+
+    await interaction.followup.send(embed=embed)
+
 
 if __name__ == "__main__":
     if not TOKEN:
