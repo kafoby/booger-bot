@@ -14,17 +14,29 @@ import re
 from petpetgif import petpet
 import io
 import time
+from PIL import Image, ImageDraw, ImageFont
+import textwrap
 
 TOKEN = os.getenv('DISCORD_TOKEN')
-GITHUB_TOKEN = "***REMOVED***"
-GOOGLE_API_KEY = "***REMOVED***"
-CSE_ID = "e44706575588a42a2"
+GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+CSE_ID = os.getenv('GOOGLE_CSE_ID')
 LASTFM_API_KEY = os.getenv('LASTFM_API_KEY')
+BOT_API_KEY = os.getenv('BOT_API_KEY')
 API_URL = 'http://127.0.0.1:5000/api/logs'
 WARNS_URL = 'http://127.0.0.1:5000/api/warns'
 LFM_URL = 'http://127.0.0.1:5000/api/lfm'
 HEARTBEAT_URL = 'http://127.0.0.1:5000/api/bot/heartbeat'
 CONFIG_URL = 'http://127.0.0.1:5000/api/bot/config'
+
+
+def get_api_headers():
+    """Get headers for API requests including authentication"""
+    headers = {"Content-Type": "application/json"}
+    if BOT_API_KEY:
+        headers["X-Bot-API-Key"] = BOT_API_KEY
+    return headers
+
 
 # Bot start time for uptime tracking
 bot_start_time = None
@@ -43,7 +55,6 @@ ALLOWED_CHANNELS = [
 ]
 # making this comment to save the state of the bot before i make a thousand changes lol -kfb
 print(f"Token available: {bool(TOKEN)}")
-print(f"Token value (first 20 chars): {TOKEN[:20] if TOKEN else 'None'}")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -57,12 +68,22 @@ tree = bot.tree
 print("Discord bot initialized")
 
 
-async def log_to_server(message, level="info"):
-    """Send log to the web server API"""
+async def log_to_server(message, level="info", category="system"):
+    """Send log to the web server API
+
+    Categories:
+    - message: Regular user messages
+    - command: Bot command executions
+    - moderation: Warns, timeouts, bans
+    - system: Bot startup, config, slash sync
+    - error: Error events (use with level="error")
+    """
     try:
         async with aiohttp.ClientSession() as session:
-            payload = {"message": message, "level": level}
-            async with session.post(API_URL, json=payload) as response:
+            payload = {"message": message, "level": level, "category": category}
+            async with session.post(API_URL,
+                                    json=payload,
+                                    headers=get_api_headers()) as response:
                 if response.status != 201:
                     print(f"Failed to log to server: {response.status}")
     except Exception as e:
@@ -90,11 +111,10 @@ async def send_heartbeat():
     """Send heartbeat to the web server API every 30 seconds"""
     try:
         async with aiohttp.ClientSession() as session:
-            payload = {
-                "status": "online",
-                "uptime": get_uptime()
-            }
-            async with session.post(HEARTBEAT_URL, json=payload) as response:
+            payload = {"status": "online", "uptime": get_uptime()}
+            async with session.post(HEARTBEAT_URL,
+                                    json=payload,
+                                    headers=get_api_headers()) as response:
                 if response.status != 200:
                     print(f"Heartbeat failed: {response.status}")
     except Exception as e:
@@ -112,15 +132,24 @@ async def fetch_config():
     global bot_config
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(CONFIG_URL, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.get(CONFIG_URL,
+                                   timeout=aiohttp.ClientTimeout(total=10),
+                                   headers=get_api_headers()) as response:
                 if response.status == 200:
                     config = await response.json()
                     bot_config = {
-                        "prefix": config.get("prefix", ","),
-                        "disabledCommands": config.get("disabledCommands") or [],
-                        "allowedChannels": [int(c) for c in (config.get("allowedChannels") or [])] if config.get("allowedChannels") else []
+                        "prefix":
+                        config.get("prefix", ","),
+                        "disabledCommands":
+                        config.get("disabledCommands") or [],
+                        "allowedChannels": [
+                            int(c)
+                            for c in (config.get("allowedChannels") or [])
+                        ] if config.get("allowedChannels") else []
                     }
-                    print(f"Config updated: prefix={bot_config['prefix']}, disabled={bot_config['disabledCommands']}")
+                    print(
+                        f"Config updated: prefix={bot_config['prefix']}, disabled={bot_config['disabledCommands']}"
+                    )
                 else:
                     print(f"Config fetch failed: {response.status}")
     except Exception as e:
@@ -141,7 +170,6 @@ async def setup_hook():
 @bot.event
 async def on_ready():
     global bot_start_time
-    bot_start_time = time.time()
 
     msg = f'{bot.user} has connected to Discord!'
     print(msg)
@@ -158,22 +186,6 @@ async def on_ready():
 
     channel = bot.get_channel(1452216636819112010)
     print(f"Channel object: {channel}")
-    if channel:
-        try:
-            if isinstance(channel, discord.TextChannel):
-                await channel.send(
-                    "clanker is up and running on replit, [and why he so eepy](https://tenor.com/view/sleepy-cat-baby-cat-coffee-cofffee-cat-sleeping-cat-gif-11793912039839338151)"
-                )
-                print("Message sent successfully!")
-                await log_to_server(f"Sent boot message to channel {channel}",
-                                    "info")
-            else:
-                print("Failed to send boot message")
-        except Exception as e:
-            print(f"Error sending message: {e}")
-            await log_to_server(f"Error sending message: {e}", "error")
-    else:
-        print("Channel not found!")
 
     try:
         synced = await tree.sync()
@@ -183,6 +195,10 @@ async def on_ready():
         print(f"Slash command sync failed: {e}")
         await log_to_server(f"Slash command sync failed: {e}", "error")
 
+    # Start uptime status task
+    bot_start_time = time.time()
+    bot.loop.create_task(uptime_status_task())
+
 
 @bot.event
 async def on_message(message):
@@ -191,7 +207,8 @@ async def on_message(message):
         return
 
     # Use dynamic config for allowed channels, fallback to legacy constant
-    allowed_channels = bot_config.get("allowedChannels", []) or ALLOWED_CHANNELS
+    allowed_channels = bot_config.get("allowedChannels",
+                                      []) or ALLOWED_CHANNELS
     if allowed_channels and message.channel.id not in allowed_channels:
         print(f"Ignored message in non-allowed channel: {message.content}")
         return
@@ -200,10 +217,12 @@ async def on_message(message):
     content = message.content
     prefix = bot_config.get("prefix", ",")
     if content.startswith(prefix):
-        command_name = content[len(prefix):].split()[0].lower() if content[len(prefix):].split() else ""
+        command_name = content[len(prefix):].split()[0].lower(
+        ) if content[len(prefix):].split() else ""
         disabled_commands = bot_config.get("disabledCommands", []) or []
         if command_name in disabled_commands:
-            await message.channel.send(f"The `{command_name}` command is currently disabled.")
+            await message.channel.send(
+                f"The `{command_name}` command is currently disabled.")
             return
 
     msg = f"Received message from {message.author}: {message.content}"
@@ -334,7 +353,9 @@ async def on_message(message):
                     "userName": target_user.name,
                     "reason": reason
                 }
-                async with session.post(WARNS_URL, json=payload) as response:
+                async with session.post(WARNS_URL,
+                                        json=payload,
+                                        headers=get_api_headers()) as response:
                     if response.status == 201:
                         await message.channel.send(
                             f'{target_user.mention} has been warned for: {reason}'
@@ -352,7 +373,8 @@ async def on_message(message):
     if message.content.startswith(',warns'):
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(WARNS_URL) as response:
+                async with session.get(WARNS_URL,
+                                       headers=get_api_headers()) as response:
                     if response.status == 200:
                         warns = await response.json()
 
@@ -862,6 +884,7 @@ async def on_message(message):
                 async with session.post(
                         LFM_URL,
                         json=payload,
+                        headers=get_api_headers(),
                         timeout=aiohttp.ClientTimeout(total=10)) as response:
                     if response.status in [200, 201]:
                         await message.channel.send(
@@ -875,6 +898,101 @@ async def on_message(message):
         except Exception as e:
             print(f"Error with ,fmset command: {e}")
             await log_to_server(f"Error with ,fmset command: {e}", "error")
+
+    if message.content.strip().lower() == ',quote' and message.reference:
+        try:
+            replied = await message.channel.fetch_message(
+                message.reference.message_id)
+
+            author = replied.author
+            content = replied.content.strip()
+            if not content:
+                await message.channel.send(
+                    "The replied message could not be quoted, try again!")
+                return
+
+            avatar_url = str(author.display_avatar.url)
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(avatar_url) as resp:
+                    if resp.status != 200:
+                        await message.channel.send("Failed to fetch avatar.")
+                        return
+                    avatar_data = await resp.read()
+
+            avatar = Image.open(io.BytesIO(avatar_data)).resize(
+                (240, 240)).convert("RGBA")
+
+            # Create wider rectangular image for inspirational quote aesthetic
+            img = Image.new("RGB", (1200, 500), color=(20, 20, 20))
+            draw = ImageDraw.Draw(img)
+
+            # Draw rounded rectangle background
+            draw.rounded_rectangle((20, 20, 1180, 480),
+                                   radius=30,
+                                   fill=(40, 40, 40))
+
+            # Position avatar on the left side
+            avatar_x = 50
+            avatar_y = (500 - 240) // 2
+            img.paste(avatar, (avatar_x, avatar_y),
+                      avatar if avatar.mode == 'RGBA' else None)
+
+            # Load fonts - try serif for fancy inspirational feel
+            try:
+                font = ImageFont.truetype(
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", 56)
+                attr_font = ImageFont.truetype(
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", 32)
+            except:
+                try:
+                    font = ImageFont.truetype("arial.ttf", 56)
+                    attr_font = ImageFont.truetype("arial.ttf", 32)
+                except:
+                    font = ImageFont.load_default()
+                    attr_font = ImageFont.load_default()
+
+            # Format quote with quotation marks
+            quoted_text = f'"{content}"'
+            wrapped_text = textwrap.fill(quoted_text, width=20)
+
+            # Center the quote text both horizontally and vertically
+            bbox = draw.multiline_textbbox((0, 0), wrapped_text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            text_x = 310 + (1200 - 310 - text_width) // 2
+            text_y = (500 - text_height) // 2
+
+            draw.multiline_text((text_x, text_y),
+                                wrapped_text,
+                                font=font,
+                                fill=(255, 255, 255),
+                                align="center")
+
+            # Add attribution with em dash
+            attribution = f"— {author.name}"
+            attr_bbox = draw.textbbox((0, 0), attribution, font=attr_font)
+            attr_width = attr_bbox[2] - attr_bbox[0]
+            attr_x = 310 + (1200 - 310 - attr_width) // 2
+
+            draw.text((attr_x, text_y + text_height + 15),
+                      attribution,
+                      font=attr_font,
+                      fill=(200, 200, 200))
+
+            buffer = io.BytesIO()
+            img.save(buffer, format="GIF", dither=Image.Dither.NONE)
+            buffer.seek(0)
+
+            embed = discord.Embed(color=0x9b59b6)
+            embed.set_image(url="attachment://quote.gif")
+
+            await message.channel.send(embed=embed,
+                                       file=discord.File(buffer,
+                                                         filename="quote.gif"))
+
+        except Exception:
+            await message.channel.send("Something went wrong while quoting.")
 
     if message.content.startswith(',fm'):
         try:
@@ -891,6 +1009,7 @@ async def on_message(message):
                 )
                 async with session.get(
                         f'{LFM_URL}/{target_user.id}',
+                        headers=get_api_headers(),
                         timeout=aiohttp.ClientTimeout(total=10)) as response:
                     print(f"LFM response status: {response.status}")
                     if response.status != 200:
@@ -1021,6 +1140,16 @@ async def on_message(message):
         except Exception as e:
             print(f"Error sending gif: {e}")
             await log_to_server(f"Error sending gif: {e}", "error")
+
+    if re.search(r'\brape\b', message.content.lower()):
+        try:
+            await message.channel.send("https://i.postimg.cc/Z5G9xTvx/rape.webp")
+            await log_to_server(
+                f"Sent message to {message.channel} in response to word 'rape'",
+                "info")
+        except Exception as e:
+            print(f"Error sending rape message: {e}")
+            await log_to_server(f"Error sending rape message: {e}", "error")
 
     if re.search(r'\b(hi|hello|hey|wave)\b', message.content.lower()):
         try:
@@ -1251,11 +1380,15 @@ async def so(interaction: discord.Interaction, query: str):
 async def askchatgpt(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
 
+    openai_key = os.getenv('OPENAI_API_KEY')
+    if not openai_key:
+        await interaction.followup.send("OpenAI API key not configured.")
+        return
+
     try:
         async with aiohttp.ClientSession() as session:
             headers = {
-                "Authorization":
-                "Bearer YOUR_OPENAI_API_KEY",
+                "Authorization": f"Bearer {openai_key}",
                 "Content-Type": "application/json"
             }
             payload = {
@@ -1306,11 +1439,15 @@ async def askchatgpt(interaction: discord.Interaction, question: str):
 async def askgrok(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
 
+    grok_key = os.getenv('GROK_API_KEY')
+    if not grok_key:
+        await interaction.followup.send("Grok API key not configured.")
+        return
+
     try:
         async with aiohttp.ClientSession() as session:
             headers = {
-                "Authorization":
-                "Bearer YOUR_XAI_API_KEY",
+                "Authorization": f"Bearer {grok_key}",
                 "Content-Type": "application/json"
             }
             payload = {
@@ -1365,11 +1502,13 @@ ffmpeg_options = {
 
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 
-SPOTIFY_CLIENT_ID = '9722662a89274a8c9915e07aae084544'
-SPOTIFY_CLIENT_SECRET = '***REMOVED***'
+SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
+SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 
-sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
-    client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
+sp = None
+if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
+    sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+        client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
 
 
 class YTDLSource(discord.PCMVolumeTransformer):
@@ -1420,6 +1559,9 @@ async def playspotify(interaction: discord.Interaction, query: str):
         return
 
     if "spotify" in query:
+        if not sp:
+            await interaction.followup.send("Spotify is not configured.")
+            return
         try:
             track_id = None
             if "spotify:track:" in query:
@@ -1496,6 +1638,141 @@ async def info(interaction: discord.Interaction):
     embed.set_footer(text="Made with love ❤️")
 
     await interaction.followup.send(embed=embed)
+
+
+@tree.command(name="nuke", description="fake nuke")
+async def nuke(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    await interaction.channel.send("🚨 **NUKE ACTIVATED** 🚨")
+
+    await asyncio.sleep(1.5)
+    await interaction.channel.send("Deleting all messages... 69%")
+
+    await asyncio.sleep(1.5)
+    await interaction.channel.send("Banning everyone... 99%")
+
+    await asyncio.sleep(1.5)
+    await interaction.channel.send("Server exploding in:")
+
+    await interaction.channel.send("**3**...")
+
+    await asyncio.sleep(1)
+    await interaction.channel.send("**2**...")
+
+    await asyncio.sleep(1)
+    await interaction.channel.send("**1**...")
+
+    await asyncio.sleep(1)
+    await interaction.channel.send(
+        "https://tenor.com/view/house-explosion-explode-boom-kaboom-gif-19506150"
+    )
+
+    await asyncio.sleep(1.5)
+    await interaction.channel.send("**jk server safe silly🥱**")
+
+
+@tree.command(name="ship", description="Ship two users")
+@app_commands.describe(user1="user1", user2="user2")
+async def ship(interaction: discord.Interaction, user1: discord.Member,
+               user2: discord.Member):
+    await interaction.response.defer()
+
+    if user1 == user2:
+        await interaction.followup.send(
+            "You can't ship someone with themselves!")
+        return
+
+    percent = random.randint(0, 100)
+
+    if percent >= 90:
+        comment = "They have each other's voodoo doll, I can bet!"
+    elif percent >= 70:
+        comment = "They prolly fuh!"
+    elif percent >= 50:
+        comment = "There's some potential in investing in ts."
+    elif percent >= 30:
+        comment = "It's complicated but idk son could work."
+    else:
+        comment = "Fuh naw there no love in this block."
+
+    try:
+        avatar1_url = user1.display_avatar.with_format("png").with_size(256).url
+        avatar2_url = user2.display_avatar.with_format("png").with_size(256).url
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(avatar1_url) as resp1:
+                avatar1_bytes = await resp1.read()
+            async with session.get(avatar2_url) as resp2:
+                avatar2_bytes = await resp2.read()
+
+        avatar1 = Image.open(io.BytesIO(avatar1_bytes)).resize((256, 256)).convert("RGBA")
+        avatar2 = Image.open(io.BytesIO(avatar2_bytes)).resize((256, 256)).convert("RGBA")
+
+        # Create image with space for both avatars and a plus sign
+        img_width = 256 + 150 + 256  # avatar1 + space for + + avatar2
+        img_height = 256
+        img = Image.new("RGBA", (img_width, img_height), color=(0, 0, 0, 0))
+
+        # Paste avatars
+        img.paste(avatar1, (0, 0), avatar1)
+        img.paste(avatar2, (256 + 150, 0), avatar2)
+
+        # Draw pink + sign in the middle
+        draw = ImageDraw.Draw(img)
+        plus_x = 256 + 75  # Center of the middle space
+        plus_y = 128  # Center vertically
+        pink = (255, 105, 180)  # Hot pink color
+
+        # Draw horizontal line of the +
+        draw.rectangle([plus_x - 40, plus_y - 15, plus_x + 40, plus_y + 15], fill=pink)
+        # Draw vertical line of the +
+        draw.rectangle([plus_x - 15, plus_y - 40, plus_x + 15, plus_y + 40], fill=pink)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+
+        embed = discord.Embed(title=f"{user1.name} ❤️ {user2.name}",
+                              color=0x9b59b6)
+        embed.description = f"Ship Percentage: {percent}%\n{comment}"
+        embed.set_image(url="attachment://ship.png")
+
+        await interaction.followup.send(embed=embed,
+                                       file=discord.File(buffer, filename="ship.png"))
+
+    except Exception as e:
+        print(f"Error with /ship command: {e}")
+        await interaction.followup.send("Something went wrong while creating the ship image.")
+
+
+CHANNEL_ID = 1452216636819112010
+
+
+async def uptime_status_task():
+    while True:
+        try:
+            current_uptime = int(time.time() - bot_start_time)
+            hours = current_uptime // 3600
+            minutes = (current_uptime % 3600) // 60
+            seconds = current_uptime % 60
+
+            embed = discord.Embed(title="Bot Uptime", color=0x9b59b6)
+            embed.set_author(name=bot.user.name,
+                             icon_url=bot.user.display_avatar.url)
+            embed.add_field(name="Status", value="🟢 Online", inline=True)
+            embed.add_field(name="Uptime",
+                            value=f"{hours}h {minutes}m {seconds}s",
+                            inline=True)
+
+            channel = bot.get_channel(CHANNEL_ID)
+            if channel:
+                await channel.send(embed=embed)
+
+        except Exception as e:
+            print("Error in uptime task:", e)
+
+        await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":

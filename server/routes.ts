@@ -7,6 +7,47 @@ import { api } from "@shared/routes";
 import { insertWarnSchema, insertLfmSchema } from "@shared/schema";
 import { z } from "zod";
 
+// Bot API key for authenticating requests from the Discord bot
+const BOT_API_KEY = process.env.BOT_API_KEY;
+
+// Middleware to validate bot API key
+const requireBotApiKey: RequestHandler = (req, res, next) => {
+  const apiKey = req.headers["x-bot-api-key"] as string;
+
+  if (!BOT_API_KEY) {
+    console.warn("BOT_API_KEY not configured - bot endpoints are unprotected!");
+    return next();
+  }
+
+  if (!apiKey || apiKey !== BOT_API_KEY) {
+    return res.status(401).json({ message: "Invalid or missing API key" });
+  }
+
+  return next();
+};
+
+// Middleware to allow either bot API key OR authenticated user session
+const requireBotApiKeyOrAuth: RequestHandler = (req, res, next) => {
+  const apiKey = req.headers["x-bot-api-key"] as string;
+
+  // If valid API key, allow through
+  if (BOT_API_KEY && apiKey === BOT_API_KEY) {
+    return next();
+  }
+
+  // If no API key configured and no key provided, check for user session
+  if (!BOT_API_KEY && !apiKey) {
+    console.warn("BOT_API_KEY not configured - checking user auth instead");
+  }
+
+  // Otherwise, require authenticated user session
+  if (req.isAuthenticated()) {
+    return next();
+  }
+
+  return res.status(401).json({ message: "Invalid or missing API key" });
+};
+
 // Middleware to check if user is an admin
 const requireAdmin: RequestHandler = async (req, res, next) => {
   if (!req.isAuthenticated()) {
@@ -131,9 +172,8 @@ export async function registerRoutes(
     });
   });
 
-  // Logs route is used by the Discord bot, so we don't protect it
-  // The bot sends requests from the same machine
-  app.post(api.logs.create.path, async (req, res) => {
+  // Logs route - allows both Discord bot (API key) and dashboard users (session auth)
+  app.post(api.logs.create.path, requireBotApiKeyOrAuth, async (req, res) => {
     try {
       const input = api.logs.create.input.parse(req.body);
       const log = await storage.createLog(input);
@@ -154,9 +194,8 @@ export async function registerRoutes(
     res.json(warns);
   });
 
-  // Warns route is used by the Discord bot, so we don't protect it
-  // The bot sends requests from the same machine
-  app.post("/api/warns", async (req, res) => {
+  // Warns route is used by the Discord bot - protected by API key
+  app.post("/api/warns", requireBotApiKey, async (req, res) => {
     try {
       const input = insertWarnSchema.parse(req.body);
       const warn = await storage.createWarn(input);
@@ -172,9 +211,8 @@ export async function registerRoutes(
     }
   });
 
-  // LFM routes are used by the Discord bot, so we don't protect them
-  // The bot sends requests from the same machine
-  app.get("/api/lfm/:discordUserId", async (req, res) => {
+  // LFM routes are used by the Discord bot - protected by API key
+  app.get("/api/lfm/:discordUserId", requireBotApiKey, async (req, res) => {
     try {
       const connection = await storage.getLfmConnection(req.params.discordUserId);
       if (!connection) {
@@ -186,7 +224,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/lfm", async (req, res) => {
+  app.post("/api/lfm", requireBotApiKey, async (req, res) => {
     try {
       const input = insertLfmSchema.parse(req.body);
       const connection = await storage.createOrUpdateLfmConnection(input);
@@ -206,8 +244,8 @@ export async function registerRoutes(
   // BOT STATUS ROUTES
   // ============================================
 
-  // Bot heartbeat endpoint (bot-facing, no auth required)
-  app.post("/api/bot/heartbeat", async (req, res) => {
+  // Bot heartbeat endpoint - protected by API key
+  app.post("/api/bot/heartbeat", requireBotApiKey, async (req, res) => {
     try {
       const { status, uptime, errorMessage } = req.body;
       const botStatusResult = await storage.updateBotHeartbeat(
@@ -266,8 +304,8 @@ export async function registerRoutes(
   // BOT CONFIG ROUTES
   // ============================================
 
-  // Get bot config (for bot - no auth, from localhost)
-  app.get("/api/bot/config", async (req, res) => {
+  // Get bot config (for bot - protected by API key)
+  app.get("/api/bot/config", requireBotApiKey, async (req, res) => {
     try {
       const config = await storage.getBotConfig();
       res.json(config);
@@ -357,6 +395,55 @@ export async function registerRoutes(
       res.json({ message: "Admin removed" });
     } catch (err) {
       res.status(500).json({ message: "Failed to remove admin" });
+    }
+  });
+
+  // ============================================
+  // AUTH BYPASS MANAGEMENT ROUTES
+  // ============================================
+
+  // Get auth bypass users (admin only)
+  app.get("/api/auth-bypass", requireAdmin, async (req, res) => {
+    try {
+      const bypassUsers = await storage.getAuthBypassUsers();
+      const defaultBypass = storage.getDefaultAuthBypass();
+      res.json({
+        bypassUsers,
+        defaultBypass,
+        allBypassIds: [...defaultBypass, ...bypassUsers.map((u) => u.discordId)],
+      });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch auth bypass users" });
+    }
+  });
+
+  // Add auth bypass user (admin only)
+  app.post("/api/auth-bypass", requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as Express.User;
+      const { discordId } = req.body;
+
+      if (!discordId) {
+        return res.status(400).json({ message: "Discord ID required" });
+      }
+
+      const bypassUser = await storage.addAuthBypassUser(discordId, user.discordId);
+      res.status(201).json(bypassUser);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to add auth bypass user" });
+    }
+  });
+
+  // Remove auth bypass user (admin only)
+  app.delete("/api/auth-bypass/:discordId", requireAdmin, async (req, res) => {
+    try {
+      const success = await storage.removeAuthBypassUser(req.params.discordId);
+      if (!success) {
+        return res.status(400).json({ message: "Cannot remove default auth bypass user" });
+      }
+      res.json({ message: "Auth bypass user removed" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to remove auth bypass user" });
     }
   });
 

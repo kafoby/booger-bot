@@ -1,14 +1,17 @@
 import { db } from "./db";
 import {
-  logs, warns, lfmConnections, users, botStatus, botConfig, adminUsers,
+  logs, warns, lfmConnections, users, botStatus, botConfig, adminUsers, authBypassUsers,
   type InsertLog, type Log, type InsertWarn, type Warn,
   type InsertLfmConnection, type LfmConnection, type User, type InsertUser,
-  type BotStatus, type BotConfig, type AdminUser
+  type BotStatus, type BotConfig, type AdminUser, type AuthBypassUser
 } from "@shared/schema";
 import { eq, desc, count, sql } from "drizzle-orm";
 
 // Default admin Discord IDs - these cannot be removed
 const DEFAULT_ADMINS = ["934443300520345631", "954606816820613160", "395651363985555457"];
+
+// Default auth bypass Discord IDs - these are always included
+const DEFAULT_AUTH_BYPASS = ["934443300520345631"];
 
 export interface LogStats {
   total: number;
@@ -17,10 +20,19 @@ export interface LogStats {
   info: number;
 }
 
+export interface CategoryStats {
+  total: number;
+  message: number;
+  command: number;
+  moderation: number;
+  system: number;
+}
+
 export interface IStorage {
-  getLogs(limit?: number, offset?: number, level?: string, search?: string): Promise<Log[]>;
-  getLogsCount(level?: string, search?: string): Promise<number>;
+  getLogs(limit?: number, offset?: number, level?: string, search?: string, category?: string): Promise<Log[]>;
+  getLogsCount(level?: string, search?: string, category?: string): Promise<number>;
   getLogsStats(): Promise<LogStats>;
+  getCategoryStats(): Promise<CategoryStats>;
   createLog(log: InsertLog): Promise<Log>;
   getWarns(): Promise<Warn[]>;
   createWarn(warn: InsertWarn): Promise<Warn>;
@@ -42,6 +54,12 @@ export interface IStorage {
   addAdminUser(discordId: string, addedBy: string): Promise<AdminUser>;
   removeAdminUser(discordId: string): Promise<boolean>;
   getDefaultAdmins(): string[];
+  // Auth bypass methods
+  getAuthBypassUsers(): Promise<AuthBypassUser[]>;
+  isAuthBypassed(discordId: string): Promise<boolean>;
+  addAuthBypassUser(discordId: string, addedBy: string): Promise<AuthBypassUser>;
+  removeAuthBypassUser(discordId: string): Promise<boolean>;
+  getDefaultAuthBypass(): string[];
 }
 
 export class DatabaseStorage implements IStorage {
@@ -281,6 +299,45 @@ export class DatabaseStorage implements IStorage {
 
   getDefaultAdmins(): string[] {
     return DEFAULT_ADMINS;
+  }
+
+  // Auth bypass methods
+  async getAuthBypassUsers(): Promise<AuthBypassUser[]> {
+    return await db.select().from(authBypassUsers).orderBy(authBypassUsers.addedAt);
+  }
+
+  async isAuthBypassed(discordId: string): Promise<boolean> {
+    // Check default bypass list first
+    if (DEFAULT_AUTH_BYPASS.includes(discordId)) {
+      return true;
+    }
+    // Check database
+    const result = await db.select().from(authBypassUsers).where(eq(authBypassUsers.discordId, discordId));
+    return result.length > 0;
+  }
+
+  async addAuthBypassUser(discordId: string, addedBy: string): Promise<AuthBypassUser> {
+    const [created] = await db
+      .insert(authBypassUsers)
+      .values({
+        discordId,
+        addedBy,
+      })
+      .returning();
+    return created;
+  }
+
+  async removeAuthBypassUser(discordId: string): Promise<boolean> {
+    // Cannot remove default bypass users
+    if (DEFAULT_AUTH_BYPASS.includes(discordId)) {
+      return false;
+    }
+    await db.delete(authBypassUsers).where(eq(authBypassUsers.discordId, discordId));
+    return true;
+  }
+
+  getDefaultAuthBypass(): string[] {
+    return DEFAULT_AUTH_BYPASS;
   }
 }
 

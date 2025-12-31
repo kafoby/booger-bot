@@ -1,13 +1,19 @@
 import rateLimit from "express-rate-limit";
 import type { Request, Response } from "express";
 
-// Check if request is from localhost (bot)
-function isLocalhost(req: Request): boolean {
-  const ip = req.ip || req.socket.remoteAddress || "";
-  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+// Bot API key for authenticating requests
+const BOT_API_KEY = process.env.BOT_API_KEY;
+
+// Check if request has valid bot API key
+function hasValidBotApiKey(req: Request): boolean {
+  if (!BOT_API_KEY) {
+    return false;
+  }
+  const apiKey = req.headers["x-bot-api-key"] as string;
+  return apiKey === BOT_API_KEY;
 }
 
-// Check if route is bot-facing (should bypass rate limiting from localhost)
+// Check if route is bot-facing (should bypass rate limiting if authenticated)
 function isBotRoute(req: Request): boolean {
   const path = req.path;
 
@@ -41,8 +47,8 @@ export const apiRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req: Request) => {
-    // Skip rate limiting for bot routes from localhost
-    return isLocalhost(req) && isBotRoute(req);
+    // Skip rate limiting for authenticated bot requests
+    return hasValidBotApiKey(req) && isBotRoute(req);
   },
   handler: (_req: Request, res: Response) => {
     res.status(429).json({

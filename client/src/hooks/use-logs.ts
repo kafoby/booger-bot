@@ -9,18 +9,27 @@ interface LogStats {
   info: number;
 }
 
+interface CategoryStats {
+  total: number;
+  message: number;
+  command: number;
+  moderation: number;
+  system: number;
+}
+
 interface LogsResponse {
   logs: Log[];
   stats: LogStats;
+  categoryStats: CategoryStats;
   limit: number;
   offset: number;
   total: number;
   hasMore: boolean;
 }
 
-export function useLogs(level?: string | null, search?: string) {
+export function useLogs(level?: string | null, search?: string, category?: string | null) {
   return useInfiniteQuery({
-    queryKey: [api.logs.list.path, level, search],
+    queryKey: [api.logs.list.path, level, search, category],
     queryFn: async ({ pageParam = 0 }) => {
       const params = new URLSearchParams({
         limit: '100',
@@ -31,6 +40,9 @@ export function useLogs(level?: string | null, search?: string) {
       }
       if (search && search.trim()) {
         params.append('search', search.trim());
+      }
+      if (category) {
+        params.append('category', category);
       }
       const res = await fetch(
         `${api.logs.list.path}?${params.toString()}`,
@@ -43,7 +55,7 @@ export function useLogs(level?: string | null, search?: string) {
       return lastPage.hasMore ? lastPage.offset + lastPage.limit : undefined;
     },
     initialPageParam: 0,
-    refetchInterval: 30000, // Reduced to 30s to avoid excessive requests
+    refetchInterval: 30000,
   });
 }
 

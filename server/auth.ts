@@ -32,11 +32,44 @@ const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const DISCORD_CALLBACK_URL = process.env.DISCORD_CALLBACK_URL || "/api/auth/discord/callback";
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;
 const REQUIRED_ROLE_ID = process.env.REQUIRED_ROLE_ID || "1452267489970094211";
-const SESSION_SECRET = process.env.SESSION_SECRET || "your-session-secret-change-in-production";
+
+// Session secret must be set in production
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+  console.error("CRITICAL: SESSION_SECRET environment variable is not set!");
+  console.error("Please set a strong random SESSION_SECRET (at least 32 characters) in Replit Secrets.");
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET must be set in production");
+  }
+}
 
 // Check if Discord credentials are configured
 export function isDiscordConfigured(): boolean {
   return !!(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET);
+}
+
+// Helper to handle Discord API requests with rate limit retry
+async function fetchWithRateLimitRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = 3
+): Promise<Response> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+
+    if (response.status === 429) {
+      const errorData = await response.json().catch(() => ({}));
+      const retryAfter = errorData.retry_after || 1;
+      console.log(`⏳ Rate limited. Waiting ${retryAfter}s before retry (attempt ${attempt + 1}/${maxRetries})...`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      continue;
+    }
+
+    return response;
+  }
+
+  // If we exhausted retries, make one final attempt and return whatever we get
+  return fetch(url, options);
 }
 
 // Fetch user's guild member data to check roles
@@ -54,11 +87,14 @@ async function checkUserRole(accessToken: string, discordId: string): Promise<bo
   try {
     // First, get the user's guilds to verify they're in the target guild
     console.log("Fetching user's guilds from Discord API...");
-    const guildsResponse = await fetch("https://discord.com/api/users/@me/guilds", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+    const guildsResponse = await fetchWithRateLimitRetry(
+      "https://discord.com/api/users/@me/guilds",
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
 
     if (!guildsResponse.ok) {
       console.error(`❌ Failed to fetch user guilds. Status: ${guildsResponse.status}`);
@@ -88,7 +124,7 @@ async function checkUserRole(accessToken: string, discordId: string): Promise<bo
     }
 
     console.log(`Fetching member data from guild using bot token...`);
-    const memberResponse = await fetch(
+    const memberResponse = await fetchWithRateLimitRetry(
       `https://discord.com/api/guilds/${DISCORD_GUILD_ID}/members/${discordId}`,
       {
         headers: {
@@ -141,6 +177,9 @@ export function setupAuth(app: Express): void {
   // Session store using PostgreSQL
   const PgSession = connectPgSimple(session);
 
+  // Use a fallback for development only
+  const sessionSecret = SESSION_SECRET || (process.env.NODE_ENV !== "production" ? "dev-only-insecure-secret" : "");
+
   app.use(
     session({
       store: new PgSession({
@@ -148,7 +187,7 @@ export function setupAuth(app: Express): void {
         tableName: "session",
         createTableIfMissing: true,
       }),
-      secret: SESSION_SECRET,
+      secret: sessionSecret,
       resave: false,
       saveUninitialized: false,
       cookie: {
@@ -242,13 +281,21 @@ export const isAuthenticated: RequestHandler = (req, res, next) => {
 };
 
 // Middleware to check if user has the required role
-export const hasRequiredRole: RequestHandler = (req, res, next) => {
+export const hasRequiredRole: RequestHandler = async (req, res, next) => {
   if (!req.isAuthenticated()) {
     console.log(`Role check failed: User not authenticated. Path: ${req.path}`);
     return res.status(401).json({ message: "Unauthorized - Please log in" });
   }
 
   const user = req.user as Express.User;
+
+  // Check if user is on auth bypass list
+  const isBypassed = await storage.isAuthBypassed(user.discordId);
+  if (isBypassed) {
+    console.log(`[hasRequiredRole] ✓ Auth bypassed for user ${user.username} (${user.discordId}). Path: ${req.path}`);
+    return next();
+  }
+
   if (!user.hasRequiredRole) {
     console.log(`Role check failed: User ${user.username} (${user.discordId}) missing required role. Path: ${req.path}`);
     return res.status(403).json({
@@ -261,7 +308,7 @@ export const hasRequiredRole: RequestHandler = (req, res, next) => {
 };
 
 // Combined middleware for protected routes
-export const requireAuth: RequestHandler = (req, res, next) => {
+export const requireAuth: RequestHandler = async (req, res, next) => {
   const path = req.path;
 
   if (!req.isAuthenticated()) {
@@ -271,6 +318,13 @@ export const requireAuth: RequestHandler = (req, res, next) => {
 
   const user = req.user as Express.User;
   console.log(`[requireAuth] User ${user.username} (${user.discordId}) accessing ${path}. hasRequiredRole: ${user.hasRequiredRole}`);
+
+  // Check if user is on auth bypass list
+  const isBypassed = await storage.isAuthBypassed(user.discordId);
+  if (isBypassed) {
+    console.log(`[requireAuth] ✓ Auth bypassed for user ${user.username} (${user.discordId}). Path: ${path}`);
+    return next();
+  }
 
   if (!user.hasRequiredRole) {
     console.log(`[requireAuth] ❌ Access denied - missing required role. Path: ${path}`);

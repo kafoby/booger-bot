@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["nettools", "vim", "cl-launch", "psmisc", "thefuck"]
+packages = ["nettools", "vim", "cl-launch", "psmisc", "thefuck", "google-cloud-sdk"]
 
 [[ports]]
 localPort = 3000
@@ -37,8 +37,12 @@ args = "Start application"
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
+mode = "parallel"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run dev"
-waitForPort = 5000
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python bot.py"

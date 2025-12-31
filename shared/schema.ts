@@ -28,6 +28,7 @@ export const logs = pgTable("logs", {
   id: serial("id").primaryKey(),
   message: text("message").notNull(),
   level: text("level").notNull().default("info"),
+  category: text("category").notNull().default("system"),
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
@@ -75,12 +76,21 @@ export const adminUsers = pgTable("admin_users", {
   addedBy: text("added_by"),
 });
 
+// Auth bypass users (users who can bypass role check)
+export const authBypassUsers = pgTable("auth_bypass_users", {
+  id: serial("id").primaryKey(),
+  discordId: text("discord_id").notNull().unique(),
+  addedAt: timestamp("added_at").defaultNow(),
+  addedBy: text("added_by"),
+});
+
 export const insertLogSchema = createInsertSchema(logs).omit({ id: true, timestamp: true });
 export const insertWarnSchema = createInsertSchema(warns).omit({ id: true, timestamp: true });
 export const insertLfmSchema = createInsertSchema(lfmConnections).omit({ id: true, timestamp: true });
 export const insertBotStatusSchema = createInsertSchema(botStatus).omit({ id: true, updatedAt: true });
 export const insertBotConfigSchema = createInsertSchema(botConfig).omit({ id: true, updatedAt: true });
 export const insertAdminUserSchema = createInsertSchema(adminUsers).omit({ id: true, addedAt: true });
+export const insertAuthBypassUserSchema = createInsertSchema(authBypassUsers).omit({ id: true, addedAt: true });
 
 export type Log = typeof logs.$inferSelect;
 export type InsertLog = z.infer<typeof insertLogSchema>;
@@ -94,6 +104,8 @@ export type BotConfig = typeof botConfig.$inferSelect;
 export type InsertBotConfig = z.infer<typeof insertBotConfigSchema>;
 export type AdminUser = typeof adminUsers.$inferSelect;
 export type InsertAdminUser = z.infer<typeof insertAdminUserSchema>;
+export type AuthBypassUser = typeof authBypassUsers.$inferSelect;
+export type InsertAuthBypassUser = z.infer<typeof insertAuthBypassUserSchema>;
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export type User = typeof users.$inferSelect;
