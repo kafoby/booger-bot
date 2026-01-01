@@ -1,4 +1,4 @@
-import { LogOut, Shield, Settings, ChevronDown } from "lucide-react";
+import { LogOut, Shield, Settings, ChevronDown, BarChart3, Users, Activity } from "lucide-react";
 import { useAuth, getDiscordAvatarUrl } from "@/lib/auth";
 import { useBotStatus } from "@/hooks/use-bot-status";
 import { Button } from "@/components/ui/button";
@@ -156,6 +156,25 @@ export function Header() {
                     <Shield className="mr-2 h-3 w-3 text-emerald-400" />
                     <span>Authorized Role</span>
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-white/10" />
+                  <Link href="/">
+                    <DropdownMenuItem className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-white/70 hover:text-white/90">
+                      <Activity className="mr-2 h-4 w-4" />
+                      <span>Dashboard</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/performance">
+                    <DropdownMenuItem className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-white/70 hover:text-white/90">
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      <span>Performance Metrics</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/users">
+                    <DropdownMenuItem className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-white/70 hover:text-white/90">
+                      <Users className="mr-2 h-4 w-4" />
+                      <span>User Activity</span>
+                    </DropdownMenuItem>
+                  </Link>
                   <DropdownMenuSeparator className="bg-white/10" />
                   <Link href="/config">
                     <DropdownMenuItem className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-white/70 hover:text-white/90">

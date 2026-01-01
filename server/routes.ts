@@ -32,6 +32,7 @@ const requireBotApiKeyOrAuth: RequestHandler = (req, res, next) => {
 
   // If valid API key, allow through
   if (BOT_API_KEY && apiKey === BOT_API_KEY) {
+    console.log(`[requireBotApiKeyOrAuth] ✓ Valid API key for ${req.path}`);
     return next();
   }
 
@@ -42,10 +43,12 @@ const requireBotApiKeyOrAuth: RequestHandler = (req, res, next) => {
 
   // Otherwise, require authenticated user session
   if (req.isAuthenticated()) {
+    console.log(`[requireBotApiKeyOrAuth] ✓ User authenticated for ${req.path}`);
     return next();
   }
 
-  return res.status(401).json({ message: "Invalid or missing API key" });
+  console.log(`[requireBotApiKeyOrAuth] ✗ Access denied for ${req.path}. Has API key: ${!!apiKey}, Is authenticated: ${req.isAuthenticated()}`);
+  return res.status(401).json({ message: "Unauthorized - Please log in" });
 };
 
 // Middleware to check if user is an admin
@@ -155,16 +158,27 @@ export async function registerRoutes(
     const offset = parseInt(req.query.offset as string) || 0;
     const level = req.query.level as string | undefined;
     const search = req.query.search as string | undefined;
+    const category = req.query.category as string | undefined;
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
+    const userId = req.query.userId as string | undefined;
 
-    const [logs, stats, filteredCount] = await Promise.all([
-      storage.getLogs(limit, offset, level, search),
+    // Debug date filters
+    if (startDate || endDate) {
+      console.log('Date filters received:', { startDate, endDate });
+    }
+
+    const [logs, stats, categoryStats, filteredCount] = await Promise.all([
+      storage.getLogs(limit, offset, level, search, category, startDate, endDate, userId),
       storage.getLogsStats(),
-      storage.getLogsCount(level, search)
+      storage.getCategoryStats(),
+      storage.getLogsCount(level, search, category, startDate, endDate, userId)
     ]);
 
     res.json({
       logs,
       stats,
+      categoryStats,
       limit,
       offset,
       total: filteredCount,
@@ -186,6 +200,69 @@ export async function registerRoutes(
         });
       }
       throw err;
+    }
+  });
+
+  // Delete logs route - admin only
+  app.delete("/api/logs", requireAdmin, async (req, res) => {
+    try {
+      const category = req.query.category as string | undefined;
+      const deletedCount = await storage.deleteLogs(category);
+
+      res.json({
+        message: category
+          ? `Deleted ${deletedCount} logs from category: ${category}`
+          : `Deleted all ${deletedCount} logs`,
+        deletedCount,
+        category: category || "all"
+      });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete logs" });
+    }
+  });
+
+  // Delete single log by ID - admin only
+  app.delete("/api/logs/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid log ID" });
+      }
+
+      const success = await storage.deleteLog(id);
+      if (!success) {
+        return res.status(404).json({ message: "Log not found" });
+      }
+
+      res.json({ message: "Log deleted successfully", id });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete log" });
+    }
+  });
+
+  // Bulk delete logs by IDs - admin only
+  app.post("/api/logs/bulk-delete", requireAdmin, async (req, res) => {
+    try {
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Invalid request: ids must be a non-empty array" });
+      }
+
+      if (ids.some(id => typeof id !== 'number' || isNaN(id))) {
+        return res.status(400).json({ message: "Invalid request: all ids must be numbers" });
+      }
+
+      const deletedCount = await storage.bulkDeleteLogs(ids);
+
+      res.json({
+        message: `Successfully deleted ${deletedCount} log${deletedCount !== 1 ? 's' : ''}`,
+        deletedCount,
+        requestedCount: ids.length
+      });
+    } catch (err) {
+      console.error("Error bulk deleting logs:", err);
+      res.status(500).json({ message: "Failed to bulk delete logs" });
     }
   });
 
@@ -444,6 +521,93 @@ export async function registerRoutes(
       res.json({ message: "Auth bypass user removed" });
     } catch (err) {
       res.status(500).json({ message: "Failed to remove auth bypass user" });
+    }
+  });
+
+  // ============================================
+  // ANALYTICS ROUTES
+  // ============================================
+
+  // Get performance metrics (protected for dashboard)
+  app.get("/api/performance", requireBotApiKeyOrAuth, async (req, res) => {
+    try {
+      const metrics = await storage.getPerformanceMetrics();
+      res.json(metrics);
+    } catch (err) {
+      console.error("Error fetching performance metrics:", err);
+      res.status(500).json({ message: "Failed to fetch performance metrics" });
+    }
+  });
+
+  // Get user activity (protected for dashboard)
+  app.get("/api/analytics/users", requireBotApiKeyOrAuth, async (req, res) => {
+    try {
+      const activity = await storage.getUserActivity();
+      res.json(activity);
+    } catch (err) {
+      console.error("Error fetching user activity:", err);
+      res.status(500).json({ message: "Failed to fetch user activity" });
+    }
+  });
+
+  // Search presets endpoints
+  app.get("/api/search-presets", requireAuth, async (req, res) => {
+    try {
+      if (!req.user?.discordId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const presets = await storage.getSearchPresets(req.user.discordId);
+      res.json(presets);
+    } catch (err) {
+      console.error("Error fetching search presets:", err);
+      res.status(500).json({ message: "Failed to fetch search presets" });
+    }
+  });
+
+  app.post("/api/search-presets", requireAuth, async (req, res) => {
+    try {
+      if (!req.user?.discordId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { name, filters } = req.body;
+      if (!name || !filters) {
+        return res.status(400).json({ message: "Name and filters are required" });
+      }
+
+      const preset = await storage.createSearchPreset({
+        name,
+        userId: req.user.discordId,
+        filters: JSON.stringify(filters),
+      });
+
+      res.status(201).json(preset);
+    } catch (err) {
+      console.error("Error creating search preset:", err);
+      res.status(500).json({ message: "Failed to create search preset" });
+    }
+  });
+
+  app.delete("/api/search-presets/:id", requireAuth, async (req, res) => {
+    try {
+      if (!req.user?.discordId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid preset ID" });
+      }
+
+      const deleted = await storage.deleteSearchPreset(id, req.user.discordId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Preset not found or unauthorized" });
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error deleting search preset:", err);
+      res.status(500).json({ message: "Failed to delete search preset" });
     }
   });
 

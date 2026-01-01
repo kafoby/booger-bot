@@ -5,7 +5,15 @@
       "Bash(npm run db:push:*)",
       "Bash(npm run check:*)",
       "Bash(npm run build:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash([ -n \"$BOT_API_KEY\" ])",
+      "Bash(echo:*)",
+      "Bash(curl -s -X POST http://127.0.0.1:5000/api/logs -H \"Content-Type: application/json\" -H \"x-bot-api-key: test\" -d '{\"\"message\"\":\"\"Test log from curl\"\",\"\"level\"\":\"\"info\"\",\"\"category\"\":\"\"system\"\"}' -w \"\\\\nHTTP Status: %{http_code}\\\\n\")",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(lsof:*)",
+      "Bash(pkill:*)"
     ]
   }
 }

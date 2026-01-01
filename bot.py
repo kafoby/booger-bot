@@ -34,7 +34,7 @@ def get_api_headers():
     """Get headers for API requests including authentication"""
     headers = {"Content-Type": "application/json"}
     if BOT_API_KEY:
-        headers["X-Bot-API-Key"] = BOT_API_KEY
+        headers["x-bot-api-key"] = BOT_API_KEY
     return headers
 
 
@@ -74,6 +74,7 @@ async def log_to_server(message, level="info", category="system"):
     Categories:
     - message: Regular user messages
     - command: Bot command executions
+    - output: Bot generated outputs (images, gifs, API responses)
     - moderation: Warns, timeouts, bans
     - system: Bot startup, config, slash sync
     - error: Error events (use with level="error")
@@ -173,7 +174,7 @@ async def on_ready():
 
     msg = f'{bot.user} has connected to Discord!'
     print(msg)
-    await log_to_server(msg, "info")
+    await log_to_server(msg, "info", "system")
 
     # Start background tasks
     if not send_heartbeat.is_running():
@@ -190,10 +191,10 @@ async def on_ready():
     try:
         synced = await tree.sync()
         print(f"Synced {len(synced)} slash commands")
-        await log_to_server(f"Synced {len(synced)} slash commands", "info")
+        await log_to_server(f"Synced {len(synced)} slash commands", "info", "system")
     except Exception as e:
         print(f"Slash command sync failed: {e}")
-        await log_to_server(f"Slash command sync failed: {e}", "error")
+        await log_to_server(f"Slash command sync failed: {e}", "error", "system")
 
     # Start uptime status task
     bot_start_time = time.time()
@@ -227,7 +228,7 @@ async def on_message(message):
 
     msg = f"Received message from {message.author}: {message.content}"
     print(msg)
-    await log_to_server(msg, "info")
+    await log_to_server(msg, "info", "message")
 
     if message.content.startswith(',rapeon'):
         if message.author.id not in [
@@ -235,10 +236,12 @@ async def on_message(message):
         ]:
             await message.channel.send(
                 "You are not allowed to use this command.")
+            await log_to_server(f"Unauthorized ,rapeon attempt by {message.author}", "warning", "command")
             return
 
         bot.rape_enabled = True
         await message.channel.send("Rape mode ON😈")
+        await log_to_server(f"{message.author} enabled rape mode", "info", "command")
         return
 
     if message.content.startswith(',rapeoff'):
@@ -247,11 +250,13 @@ async def on_message(message):
         ]:
             await message.channel.send(
                 "You are not allowed to use this command.")
+            await log_to_server(f"Unauthorized ,rapeoff attempt by {message.author}", "warning", "command")
             return
 
         bot.rape_enabled = False
         await message.channel.send(
             "Rape mode OFF <a:cr_asad:1166759175217487902>")
+        await log_to_server(f"{message.author} disabled rape mode", "info", "command")
         return
 
     if message.content.startswith(',rape '):
@@ -323,8 +328,8 @@ async def on_message(message):
 
                     await message.channel.send(embed=embed)
                     await log_to_server(
-                        f"{author} raped {target_user} via ,rape command",
-                        "info")
+                        f"{author} used ,rape command on {target_user}",
+                        "info", "command")
                     return
         except Exception as e:
             print(f"Error with ,rape command: {e}")
@@ -361,7 +366,7 @@ async def on_message(message):
                             f'{target_user.mention} has been warned for: {reason}'
                         )
                         await log_to_server(
-                            f"Warned {target_user} for: {reason}", "info")
+                            f"{message.author} warned {target_user.name} (ID: {target_user.id}) for: {reason}", "warning", "moderation")
                     else:
                         await message.channel.send(
                             'Error: Failed to save warning')
@@ -409,7 +414,7 @@ async def on_message(message):
 
                         await message.channel.send(embed=embed)
                         await log_to_server(
-                            f"Viewed warns in {message.channel}", "info")
+                            f"{message.author} viewed warns in {message.channel}", "info", "command")
                     else:
                         await message.channel.send(
                             'Error: Could not fetch warns')
@@ -437,8 +442,8 @@ async def on_message(message):
                 pass
 
             await message.channel.send(text_to_say)
-            await log_to_server(f"Bot said: {text_to_say} (via ,say command)",
-                                "info")
+            await log_to_server(f"{message.author} used ,say command: {text_to_say[:100]}{'...' if len(text_to_say) > 100 else ''}",
+                                "info", "command")
         except Exception as e:
             print(f"Error with ,say command: {e}")
             await log_to_server(f"Error with ,say command: {e}", "error")
@@ -459,8 +464,8 @@ async def on_message(message):
                             embed.set_image(url=cat_url)
                             await message.channel.send(embed=embed)
                             await log_to_server(
-                                f"Sent cat gif to {message.channel} via ,cat command",
-                                "info")
+                                f"{message.author} used ,cat command",
+                                "info", "output")
         except Exception as e:
             print(f"Error fetching cat gif: {e}")
             await log_to_server(f"Error fetching cat gif: {e}", "error")
@@ -481,8 +486,8 @@ async def on_message(message):
                             embed.set_image(url=dog_url)
                             await message.channel.send(embed=embed)
                             await log_to_server(
-                                f"Sent dog gif to {message.channel} via ,dog command",
-                                "info")
+                                f"{message.author} used ,dog command",
+                                "info", "output")
         except Exception as e:
             print(f"Error fetching dog gif: {e}")
             await log_to_server(f"Error fetching dog gif: {e}", "error")
@@ -505,8 +510,8 @@ async def on_message(message):
 
             await message.channel.send(embed=embed)
             await log_to_server(
-                f"Sent gay meter for {target_user} ({gay_percentage}%) via ,gay command",
-                "info")
+                f"{message.author} used ,gay command on {target_user.name}: {gay_percentage}%",
+                "info", "output")
         except Exception as e:
             print(f"Error with ,gay command: {e}")
             await log_to_server(f"Error with ,gay command: {e}", "error")
@@ -533,7 +538,7 @@ async def on_message(message):
 
             await message.channel.send(embed=embed)
             await log_to_server(
-                f"{author} kissed {target_user} via ,kiss command", "info")
+                f"{author.name} used ,kiss command on {target_user.name}", "info", "output")
         except Exception as e:
             print(f"Error with ,kiss command: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -597,8 +602,8 @@ async def on_message(message):
 
                     await message.channel.send(embed=embed)
                     await log_to_server(
-                        f"{author} slapped {target_user} via ,slap command",
-                        "info")
+                        f"{author.name} used ,slap command on {target_user.name}",
+                        "info", "output")
         except Exception as e:
             print(f"Error with ,slap command: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -650,9 +655,11 @@ async def on_message(message):
                     embed.set_image(url=image_url)
 
                     await message.channel.send(embed=embed)
+                    await log_to_server(f"{message.author} used ,crocodile command", "info", "output")
         except Exception as e:
             print(f"Error with ,crocodile command: {e}")
             await message.channel.send(f"Error: {str(e)}")
+            await log_to_server(f"Error with ,crocodile command: {e}", "error", "command")
 
     if message.content.startswith(',seal'):
         try:
@@ -701,8 +708,8 @@ async def on_message(message):
 
                     await message.channel.send(embed=embed)
                     await log_to_server(
-                        f"Sent seal image to {message.channel} via ,seal command",
-                        "info")
+                        f"{message.author} used ,seal command",
+                        "info", "output")
         except Exception as e:
             print(f"Error with ,seal command: {e}")
             await message.channel.send(f"Error: {str(e)}")
@@ -737,9 +744,11 @@ async def on_message(message):
             await message.channel.send(embed=embed,
                                        file=discord.File(dest,
                                                          filename="pet.gif"))
+            await log_to_server(f"{author.name} used ,pet command on {target.name}", "info", "output")
 
         except Exception as e:
             await message.channel.send(str(e))
+            await log_to_server(f"Error with ,pet command: {e}", "error", "command")
 
     if message.content.startswith(',say2 '):
         try:
@@ -765,7 +774,7 @@ async def on_message(message):
             try:
                 await target_user.send(text_to_send)
                 await log_to_server(
-                    f"Sent DM to {target_user}: {text_to_send}", "info")
+                    f"{message.author} used ,say2 to DM {target_user.name}: {text_to_send[:100]}{'...' if len(text_to_send) > 100 else ''}", "info", "command")
             except discord.Forbidden:
                 await log_to_server(
                     f"Failed to send DM to {target_user} - DMs disabled",
@@ -810,8 +819,8 @@ async def on_message(message):
                                       reason="Timed out by bot command")
             await message.channel.send(
                 f'{target_user.mention} has been timed out for {duration_str}')
-            await log_to_server(f"Timed out {target_user} for {duration_str}",
-                                "info")
+            await log_to_server(f"{message.author} timed out {target_user.name} (ID: {target_user.id}) for {duration_str}",
+                                "warning", "moderation")
         except Exception as e:
             print(f"Error timing out user: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -863,11 +872,13 @@ async def on_message(message):
             embed.set_image(url=gif_url)
 
             await message.channel.send(embed=embed)
+            await log_to_server(f"{author.name} used ,diddle command on {target.name}", "info", "output")
 
         except Exception as e:
             print(f"Error with ,diddle command: {e}")
             await message.channel.send(
                 "Something went wrong while fetching the GIF.")
+            await log_to_server(f"Error with ,diddle command: {e}", "error", "command")
 
     if message.content.startswith(',fmset '):
         try:
@@ -890,8 +901,8 @@ async def on_message(message):
                         await message.channel.send(
                             f'Last.fm account set to `{lfm_username}`')
                         await log_to_server(
-                            f"Set Last.fm account for {message.author} to {lfm_username}",
-                            "info")
+                            f"{message.author} set Last.fm account to {lfm_username}",
+                            "info", "command")
                     else:
                         await message.channel.send(
                             'Error setting Last.fm account')
@@ -981,18 +992,20 @@ async def on_message(message):
                       fill=(200, 200, 200))
 
             buffer = io.BytesIO()
-            img.save(buffer, format="GIF", dither=Image.Dither.NONE)
+            img.save(buffer, format="PNG")
             buffer.seek(0)
 
             embed = discord.Embed(color=0x9b59b6)
-            embed.set_image(url="attachment://quote.gif")
+            embed.set_image(url="attachment://quote.png")
 
             await message.channel.send(embed=embed,
                                        file=discord.File(buffer,
-                                                         filename="quote.gif"))
+                                                         filename="quote.png"))
+            await log_to_server(f"{message.author} used ,quote command on message by {author.name}", "info", "output")
 
-        except Exception:
+        except Exception as e:
             await message.channel.send("Something went wrong while quoting.")
+            await log_to_server(f"Error with ,quote command: {e}", "error", "command")
 
     if message.content.startswith(',fm'):
         try:
@@ -1122,8 +1135,8 @@ async def on_message(message):
                         pass
 
                     await log_to_server(
-                        f"Fetched Last.fm now playing for {target_user}: {track_name} by {artist_name}",
-                        "info")
+                        f"{message.author} used ,fm command to view {target_user.name}'s now playing: {track_name} by {artist_name}",
+                        "info", "output")
         except Exception as e:
             print(f"Error with ,fm command: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -1135,8 +1148,8 @@ async def on_message(message):
                 'https://cdn.discordapp.com/attachments/1279123313519624212/1316546100617805904/attachment-3.gif'
             )
             await log_to_server(
-                f"Sent gif to {message.channel} in response to message: {message.content}",
-                "info")
+                f"Auto-response triggered by keyword in message from {message.author}",
+                "info", "output")
         except Exception as e:
             print(f"Error sending gif: {e}")
             await log_to_server(f"Error sending gif: {e}", "error")
@@ -1145,8 +1158,8 @@ async def on_message(message):
         try:
             await message.channel.send("https://i.postimg.cc/Z5G9xTvx/rape.webp")
             await log_to_server(
-                f"Sent message to {message.channel} in response to word 'rape'",
-                "info")
+                f"Auto-response triggered by keyword in message from {message.author}",
+                "info", "output")
         except Exception as e:
             print(f"Error sending rape message: {e}")
             await log_to_server(f"Error sending rape message: {e}", "error")
@@ -1154,7 +1167,7 @@ async def on_message(message):
     if re.search(r'\b(hi|hello|hey|wave)\b', message.content.lower()):
         try:
             await message.add_reaction('<a:wave:1166754943785500722>')
-            await log_to_server(f"Reacted to {message.author} with wave")
+            await log_to_server(f"Auto-reacted to greeting from {message.author}", "info", "output")
         except Exception as e:
             print(f"Error reacting to message: {e}")
             await log_to_server(f"Error reacting to message: {e}", "error")
@@ -1168,6 +1181,7 @@ async def youtube(interaction: discord.Interaction, link: str):
 
     if "youtube.com" not in link and "youtu.be" not in link:
         await interaction.followup.send("Invalid YouTube link.")
+        await log_to_server(f"{interaction.user} used /youtube with invalid link", "warning", "command")
         return
 
     await interaction.followup.send(f"[yt]({link})")
@@ -1179,6 +1193,7 @@ async def youtube(interaction: discord.Interaction, link: str):
     embed.description = f"[Download video (up to 720p)]({ss_download})\n[Upload downloaded video to catbox.moe for permanent share](https://catbox.moe/)"
 
     await interaction.followup.send(embed=embed)
+    await log_to_server(f"{interaction.user} used /youtube command with link: {link[:50]}{'...' if len(link) > 50 else ''}", "info", "command")
 
 
 @tree.command(name="lumsearch", description="Search Google")
@@ -1200,12 +1215,14 @@ async def search(interaction: discord.Interaction, query: str):
                 if resp.status != 200:
                     await interaction.followup.send(
                         "Error contacting Google API.")
+                    await log_to_server(f"/lumsearch API error for query '{query}' by {interaction.user}", "error", "command")
                     return
                 data = await resp.json()
 
         items = data.get("items", [])
         if not items:
             await interaction.followup.send("No results found for your query.")
+            await log_to_server(f"{interaction.user} used /lumsearch with query '{query}' - no results", "info", "output")
             return
 
         embed = discord.Embed(title="Google Results",
@@ -1221,11 +1238,12 @@ async def search(interaction: discord.Interaction, query: str):
                             inline=False)
 
         await interaction.followup.send(embed=embed)
+        await log_to_server(f"{interaction.user} used /lumsearch with query: {query[:100]}{'...' if len(query) > 100 else ''}", "info", "output")
 
     except Exception as e:
         print(f"/lumsearch error: {e}")
-        await interaction.followup.send("Something went wrong while searching."
-                                        )
+        await interaction.followup.send("Something went wrong while searching.")
+        await log_to_server(f"Error with /lumsearch command: {e}", "error", "command")
 
 
 @tree.command(name="reel", description="embeds an insta reel of your choice")
@@ -1236,6 +1254,7 @@ async def reel(interaction: discord.Interaction, link: str):
     modified_link = link.replace("instagram.com", "kkinstagram.com")
 
     await interaction.followup.send(f"[reel]({modified_link})")
+    await log_to_server(f"{interaction.user} used /reel command", "info", "output")
 
 
 @tree.command(name="tiktok", description="embed tiktok url of your choice")
@@ -1252,6 +1271,7 @@ async def tiktok(interaction: discord.Interaction, link: str):
     modified_link = re.sub(r"https://.*\.tiktok", "https://d.tnktok", link)
 
     await interaction.followup.send(f"[tiktok]({modified_link})")
+    await log_to_server(f"{interaction.user} used /tiktok command", "info", "output")
 
 
 yt_dlp.utils.bug_reports_message = lambda: ''
@@ -1320,10 +1340,12 @@ async def github(interaction: discord.Interaction,
                                 inline=False)
 
         await interaction.followup.send(embed=embed)
+        await log_to_server(f"{interaction.user} used /github to search {type}: {query[:100]}{'...' if len(query) > 100 else ''}", "info", "output")
 
-    except Exception:
+    except Exception as e:
         await interaction.followup.send(
             "Something went wrong while searching GitHub.")
+        await log_to_server(f"Error with /github command: {e}", "error", "command")
 
 
 @tree.command(name="stackoverflow", description="search on stack overflow")
@@ -1369,10 +1391,12 @@ async def so(interaction: discord.Interaction, query: str):
                 inline=False)
 
         await interaction.followup.send(embed=embed)
+        await log_to_server(f"{interaction.user} used /stackoverflow with query: {query[:100]}{'...' if len(query) > 100 else ''}", "info", "output")
 
-    except Exception:
+    except Exception as e:
         await interaction.followup.send(
             "Something went wrong while searching Stack Overflow.")
+        await log_to_server(f"Error with /stackoverflow command: {e}", "error", "command")
 
 
 @tree.command(name="askgpt", description="ask chatgpt a question")
@@ -1428,10 +1452,12 @@ async def askchatgpt(interaction: discord.Interaction, question: str):
         embed.set_footer(text=f"Asked by {interaction.user.display_name}")
 
         await interaction.followup.send(embed=embed)
+        await log_to_server(f"{interaction.user} used /askgpt with question: {question[:100]}{'...' if len(question) > 100 else ''}", "info", "output")
 
-    except Exception:
+    except Exception as e:
         await interaction.followup.send(
             "Something went wrong while asking ChatGPT.")
+        await log_to_server(f"Error with /askgpt command: {e}", "error", "command")
 
 
 @tree.command(name="askgrok", description="ask grok something")
@@ -1477,9 +1503,11 @@ async def askgrok(interaction: discord.Interaction, question: str):
         embed.set_footer(text=f"Asked by {interaction.user.display_name}")
 
         await interaction.followup.send(embed=embed)
+        await log_to_server(f"{interaction.user} used /askgrok with question: {question[:100]}{'...' if len(question) > 100 else ''}", "info", "output")
 
     except Exception as e:
         await interaction.followup.send(f"Error: {str(e)}")
+        await log_to_server(f"Error with /askgrok command: {e}", "error", "command")
 
 
 ytdl_format_options = {
@@ -1592,8 +1620,10 @@ async def playspotify(interaction: discord.Interaction, query: str):
             vc.stop()
         vc.play(player)
         await interaction.followup.send(f"Now playing: **{player.title}**")
+        await log_to_server(f"{interaction.user} used /playspotify to play: {player.title}", "info", "output")
     except Exception as e:
         await interaction.followup.send(f"Playback error: {e}")
+        await log_to_server(f"Error with /playspotify command: {e}", "error", "command")
 
 
 @tree.command(name="stop", description="Stop music and disconnect")
@@ -1610,11 +1640,14 @@ async def stop_music(interaction: discord.Interaction):
             vc.stop()
         await asyncio.wait_for(vc.disconnect(force=True), timeout=10)
         await interaction.followup.send("Disconnected.")
+        await log_to_server(f"{interaction.user} used /stop to disconnect from voice", "info", "command")
     except asyncio.TimeoutError:
         vc.cleanup()
         await interaction.followup.send("Disconnected.")
+        await log_to_server(f"{interaction.user} used /stop to disconnect from voice", "info", "command")
     except Exception as e:
         await interaction.followup.send(f"Disconnect error: {e}")
+        await log_to_server(f"Error with /stop command: {e}", "error", "command")
 
 
 @tree.command(name="info", description="shows bot info and commands list")
@@ -1638,6 +1671,7 @@ async def info(interaction: discord.Interaction):
     embed.set_footer(text="Made with love ❤️")
 
     await interaction.followup.send(embed=embed)
+    await log_to_server(f"{interaction.user} used /info command", "info", "command")
 
 
 @tree.command(name="nuke", description="fake nuke")
@@ -1670,6 +1704,7 @@ async def nuke(interaction: discord.Interaction):
 
     await asyncio.sleep(1.5)
     await interaction.channel.send("**jk server safe silly🥱**")
+    await log_to_server(f"{interaction.user} used /nuke command", "info", "command")
 
 
 @tree.command(name="ship", description="Ship two users")
@@ -1740,10 +1775,12 @@ async def ship(interaction: discord.Interaction, user1: discord.Member,
 
         await interaction.followup.send(embed=embed,
                                        file=discord.File(buffer, filename="ship.png"))
+        await log_to_server(f"{interaction.user} used /ship on {user1.name} and {user2.name}: {percent}%", "info", "output")
 
     except Exception as e:
         print(f"Error with /ship command: {e}")
         await interaction.followup.send("Something went wrong while creating the ship image.")
+        await log_to_server(f"Error with /ship command: {e}", "error", "command")
 
 
 CHANNEL_ID = 1452216636819112010

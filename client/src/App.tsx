@@ -9,6 +9,8 @@ import { useMemo } from "react";
 import Dashboard from "@/pages/Dashboard";
 import Login from "@/pages/Login";
 import Config from "@/pages/Config";
+import Performance from "@/pages/Performance";
+import Users from "@/pages/Users";
 import NotFound from "@/pages/not-found";
 
 // Floating particles background component - memoized to prevent re-renders
@@ -110,6 +112,12 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/config">
         <ProtectedRoute component={Config} />
+      </Route>
+      <Route path="/performance">
+        <ProtectedRoute component={Performance} />
+      </Route>
+      <Route path="/users">
+        <ProtectedRoute component={Users} />
       </Route>
       <Route path="/">
         <ProtectedRoute component={Dashboard} />

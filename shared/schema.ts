@@ -84,6 +84,16 @@ export const authBypassUsers = pgTable("auth_bypass_users", {
   addedBy: text("added_by"),
 });
 
+// Search presets for saving advanced search filters
+export const searchPresets = pgTable("search_presets", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  userId: text("user_id").notNull(), // Discord ID of the user who created it
+  filters: text("filters").notNull(), // JSON stringified filters object
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertLogSchema = createInsertSchema(logs).omit({ id: true, timestamp: true });
 export const insertWarnSchema = createInsertSchema(warns).omit({ id: true, timestamp: true });
 export const insertLfmSchema = createInsertSchema(lfmConnections).omit({ id: true, timestamp: true });
@@ -91,6 +101,7 @@ export const insertBotStatusSchema = createInsertSchema(botStatus).omit({ id: tr
 export const insertBotConfigSchema = createInsertSchema(botConfig).omit({ id: true, updatedAt: true });
 export const insertAdminUserSchema = createInsertSchema(adminUsers).omit({ id: true, addedAt: true });
 export const insertAuthBypassUserSchema = createInsertSchema(authBypassUsers).omit({ id: true, addedAt: true });
+export const insertSearchPresetSchema = createInsertSchema(searchPresets).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type Log = typeof logs.$inferSelect;
 export type InsertLog = z.infer<typeof insertLogSchema>;
@@ -110,3 +121,5 @@ export type InsertAuthBypassUser = z.infer<typeof insertAuthBypassUserSchema>;
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type SearchPreset = typeof searchPresets.$inferSelect;
+export type InsertSearchPreset = z.infer<typeof insertSearchPresetSchema>;
