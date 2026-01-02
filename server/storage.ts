@@ -362,7 +362,7 @@ export class DatabaseStorage implements IStorage {
         .values({
           prefix: ",",
           disabledCommands: [],
-          allowedChannels: ["1452216636819112010", "971303412849332226"],
+          allowedChannels: ["1452216636819112010"],
         })
         .returning();
       return created;

@@ -50,7 +50,7 @@ export function Header() {
             <h1 className="text-xl font-bold tracking-tight text-gradient">
               CrustyButtNugget<span className="text-white/40">.log</span>
             </h1>
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <motion.span
                 className={cn(
                   "w-2 h-2 rounded-full relative",
@@ -62,17 +62,17 @@ export function Header() {
                 )}
                 animate={
                   botStatus?.isOnline && !statusLoading
-                    ? { scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }
+                    ? { scale: [1, 1.15, 1], opacity: [1, 0.8, 1] }
                     : {}
                 }
-                transition={{ duration: 2, repeat: Infinity }}
+                transition={{ duration: 2.5, repeat: Infinity }}
               >
-                {/* Glow effect for online status */}
+                {/* More subtle glow for online status */}
                 {botStatus?.isOnline && !statusLoading && (
-                  <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-30" />
+                  <span className="absolute inset-0 rounded-full bg-emerald-400 opacity-20" style={{ filter: 'blur(3px)' }} />
                 )}
               </motion.span>
-              <span className="text-white/40">
+              <span className="text-white/50">
                 {statusLoading
                   ? "Checking..."
                   : botStatus?.lastSeenText || "Unknown"}
@@ -85,7 +85,7 @@ export function Header() {
           {/* Stats section */}
           <div className="hidden md:flex items-center gap-6">
             <div className="flex flex-col items-end">
-              <span className="text-[10px] uppercase text-white/30 font-mono tracking-wider">
+              <span className="text-[11px] text-white/40 tracking-wide">
                 Uptime
               </span>
               <span className="text-sm font-mono text-white/70">
@@ -94,12 +94,12 @@ export function Header() {
             </div>
             <div className="w-px h-8 bg-white/10" />
             <div className="flex flex-col items-end">
-              <span className="text-[10px] uppercase text-white/30 font-mono tracking-wider">
+              <span className="text-[11px] text-white/40 tracking-wide">
                 Status
               </span>
               <span
                 className={cn(
-                  "text-sm font-mono font-medium",
+                  "text-sm font-medium",
                   botStatus?.isOnline ? "text-emerald-400" : "text-red-400"
                 )}
               >

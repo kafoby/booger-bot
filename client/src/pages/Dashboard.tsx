@@ -262,7 +262,7 @@ export default function Dashboard() {
           transition={{ duration: 0.5 }}
           className="glass-card rounded-2xl p-2"
         >
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {categories.map((category, index) => {
               const Icon = category.icon;
               const isActive = activeCategory === category.id;
@@ -271,20 +271,15 @@ export default function Dashboard() {
                 : categoryStats?.[category.id as keyof typeof categoryStats] || 0;
 
               return (
-                <motion.button
+                <button
                   key={category.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: index * 0.05, duration: 0.3 }}
-                  whileHover={{ scale: 1.02, y: -2 }}
-                  whileTap={{ scale: 0.98 }}
                   onClick={() => setActiveCategory(category.id)}
                   className={cn(
-                    "relative flex flex-col items-center gap-3 p-4 rounded-xl transition-all duration-300",
-                    "border-2",
+                    "relative flex flex-col items-center gap-3 p-4 rounded-xl transition-all duration-200",
+                    "border hover-border",
                     isActive
                       ? `border-white/20 bg-gradient-to-br ${category.gradient} shadow-lg shadow-white/5`
-                      : "border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]"
+                      : "border-white/8 bg-white/[0.02] hover:bg-white/[0.04]"
                   )}
                 >
                   {/* Active indicator */}
@@ -308,23 +303,23 @@ export default function Dashboard() {
                     <div className="text-center">
                       <div
                         className={cn(
-                          "text-xs font-mono font-bold transition-colors duration-300",
-                          isActive ? "text-white" : "text-white/50"
+                          "text-xs font-medium transition-colors duration-200",
+                          isActive ? "text-white" : "text-white/60"
                         )}
                       >
                         {category.label}
                       </div>
                       <div
                         className={cn(
-                          "text-[10px] font-mono transition-colors duration-300",
-                          isActive ? category.color : "text-white/30"
+                          "text-[11px] transition-colors duration-200",
+                          isActive ? category.color : "text-white/40"
                         )}
                       >
                         {count.toLocaleString()}
                       </div>
                     </div>
                   </div>
-                </motion.button>
+                </button>
               );
             })}
           </div>
@@ -625,45 +620,33 @@ export default function Dashboard() {
                 <div className="w-px h-4 bg-white/10 ml-2" />
                 <Terminal className="w-4 h-4 text-white/30" />
               </div>
-              <div className="text-[10px] font-mono text-white/30 uppercase tracking-[0.2em]">
+              <div className="text-xs font-mono text-white/40">
                 /var/log/{activeCategory}
               </div>
             </div>
 
-            <div className="p-5 space-y-2 flex-1 relative">
+            <div className="flex-1 relative">
               {isLoading ? (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex flex-col items-center gap-6">
-                    <div className="relative">
+                  <div className="flex items-center gap-3 font-mono text-sm text-white/50">
+                    <div className="flex gap-1">
                       <motion.div
-                        className="w-16 h-16 rounded-full border-2 border-white/10"
-                        animate={{ rotate: 360 }}
-                        transition={{
-                          duration: 2,
-                          repeat: Infinity,
-                          ease: "linear",
-                        }}
+                        className="w-1.5 h-1.5 rounded-full bg-white/40"
+                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        transition={{ duration: 1.2, repeat: Infinity, delay: 0 }}
                       />
                       <motion.div
-                        className="absolute inset-3 rounded-full bg-gradient-to-br from-white/10 to-transparent"
-                        animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
+                        className="w-1.5 h-1.5 rounded-full bg-white/40"
+                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }}
                       />
                       <motion.div
-                        className="absolute inset-0 flex items-center justify-center"
-                        animate={{ scale: [1, 1.2, 1] }}
-                        transition={{ duration: 1, repeat: Infinity }}
-                      >
-                        <div className="w-2 h-2 rounded-full bg-white/40" />
-                      </motion.div>
+                        className="w-1.5 h-1.5 rounded-full bg-white/40"
+                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        transition={{ duration: 1.2, repeat: Infinity, delay: 0.4 }}
+                      />
                     </div>
-                    <motion.p
-                      className="text-sm font-mono text-white/40 tracking-widest uppercase"
-                      animate={{ opacity: [0.4, 0.8, 0.4] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    >
-                      Loading data stream
-                    </motion.p>
+                    <span>Loading logs</span>
                   </div>
                 </div>
               ) : error ? (
@@ -688,23 +671,19 @@ export default function Dashboard() {
                     onClick={() => refetch()}
                     className="border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-xl"
                   >
-                    RETRY CONNECTION
+                    Retry Connection
                   </Button>
                 </div>
               ) : logs?.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full py-20">
-                  <motion.div
-                    className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-4"
-                    animate={{ y: [0, -5, 0] }}
-                    transition={{ duration: 3, repeat: Infinity }}
-                  >
-                    <Terminal className="w-8 h-8 text-white/20" />
-                  </motion.div>
-                  <p className="font-mono text-white/30">No logs found in this category.</p>
+                <div className="flex items-center justify-center h-full py-20">
+                  <div className="flex items-center gap-3 font-mono text-sm text-white/40">
+                    <Terminal className="w-4 h-4" />
+                    <span>No logs found in this category</span>
+                  </div>
                 </div>
               ) : (
                 <>
-                  <div className="space-y-2 pb-4">
+                  <div className="pb-4">
                     <AnimatePresence mode="popLayout">
                       {logs?.map((log, i) => (
                         <LogCard

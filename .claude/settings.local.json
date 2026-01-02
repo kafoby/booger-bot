@@ -13,7 +13,8 @@
       "Bash(curl:*)",
       "Bash(python3:*)",
       "Bash(lsof:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(pip install:*)"
     ]
   }
 }

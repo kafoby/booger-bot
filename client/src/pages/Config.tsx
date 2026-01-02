@@ -26,25 +26,42 @@ import {
 import { Link } from "wouter";
 
 const AVAILABLE_COMMANDS = [
-  { name: "rapeon", description: "Enable rape mode" },
-  { name: "rapeoff", description: "Disable rape mode" },
-  { name: "rape", description: "Rape command" },
-  { name: "warn", description: "Warn a user" },
-  { name: "warns", description: "View warnings" },
-  { name: "say", description: "Bot says message" },
-  { name: "say2", description: "Bot DMs user" },
-  { name: "cat", description: "Random cat GIF" },
-  { name: "dog", description: "Random dog GIF" },
-  { name: "seal", description: "Random seal image" },
-  { name: "crocodile", description: "Random crocodile image" },
-  { name: "gay", description: "Gay meter" },
-  { name: "kiss", description: "Kiss a user" },
-  { name: "slap", description: "Slap a user" },
-  { name: "pet", description: "Pet a user" },
-  { name: "diddle", description: "Diddle command" },
-  { name: "timeout", description: "Timeout a user" },
-  { name: "fmset", description: "Set Last.fm username" },
-  { name: "fm", description: "Show now playing" },
+  { name: "rapeon", description: "Enable rape mode", prefix: "," },
+  { name: "rapeoff", description: "Disable rape mode", prefix: "," },
+  { name: "rape", description: "Rape command", prefix: "," },
+  { name: "warn", description: "Warn a user", prefix: "," },
+  { name: "warns", description: "View warnings", prefix: "," },
+  { name: "say", description: "Bot says message", prefix: "," },
+  { name: "say2", description: "Bot DMs user", prefix: "," },
+  { name: "cat", description: "Random cat GIF", prefix: "," },
+  { name: "dog", description: "Random dog GIF", prefix: "," },
+  { name: "seal", description: "Random seal image", prefix: "," },
+  { name: "crocodile", description: "Random crocodile image", prefix: "," },
+  { name: "gay", description: "Gay meter", prefix: "," },
+  { name: "kiss", description: "Kiss a user", prefix: "," },
+  { name: "slap", description: "Slap a user", prefix: "," },
+  { name: "pet", description: "Pet a user", prefix: "," },
+  { name: "diddle", description: "Diddle command", prefix: "," },
+  { name: "timeout", description: "Timeout a user", prefix: "," },
+  { name: "fmset", description: "Set Last.fm username", prefix: "," },
+  { name: "fm", description: "Show now playing", prefix: "," },
+  { name: "quote", description: "Quote a message", prefix: "," },
+  { name: "youtube", description: "Share YouTube video", prefix: "/" },
+  { name: "lumsearch", description: "Search Google", prefix: "/" },
+  { name: "reel", description: "Embed Instagram reel", prefix: "/" },
+  { name: "tiktok", description: "Embed TikTok video", prefix: "/" },
+  { name: "github", description: "Search GitHub", prefix: "/" },
+  { name: "stackoverflow", description: "Search Stack Overflow", prefix: "/" },
+  { name: "askgpt", description: "Ask ChatGPT", prefix: "/" },
+  { name: "askgrok", description: "Ask Grok", prefix: "/" },
+  { name: "playspotify", description: "Play music", prefix: "/" },
+  { name: "stop", description: "Stop music", prefix: "/" },
+  { name: "info", description: "Bot info", prefix: "/" },
+  { name: "nuke", description: "Fake nuke", prefix: "/" },
+  { name: "ship", description: "Ship two users", prefix: "/" },
+  { name: "remindme", description: "Set a reminder", prefix: "/" },
+  { name: "reminders", description: "List reminders", prefix: "/" },
+  { name: "meme", description: "Generate meme", prefix: "/" },
 ];
 
 export default function Config() {
@@ -380,7 +397,7 @@ export default function Config() {
                     >
                       <div className="flex flex-col">
                         <span className="font-mono text-sm font-medium text-white/80 group-hover:text-white/90 transition-colors">
-                          {prefix}{cmd.name}
+                          {cmd.prefix === "/" ? "/" : prefix}{cmd.name}
                         </span>
                         <span className="text-xs text-white/30">
                           {cmd.description}

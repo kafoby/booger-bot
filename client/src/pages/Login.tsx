@@ -8,46 +8,18 @@ import { AlertTriangle, Lock, Shield, Sparkles } from "lucide-react";
 import { FaDiscord } from "react-icons/fa";
 import { motion } from "framer-motion";
 
-// Animated orbs for the background
-function AnimatedOrbs() {
+// Simplified ambient background - static, not mechanical
+function AmbientBackground() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Large gradient orb */}
-      <motion.div
-        className="absolute w-[600px] h-[600px] rounded-full"
+      {/* Single subtle gradient accent */}
+      <div
+        className="absolute w-[500px] h-[500px] rounded-full opacity-40"
         style={{
-          background: "radial-gradient(circle, rgba(100,100,150,0.15) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(105,110,160,0.12) 0%, transparent 65%)",
           left: "50%",
-          top: "20%",
+          top: "25%",
           transform: "translate(-50%, -50%)",
-        }}
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.3, 0.5, 0.3],
-        }}
-        transition={{
-          duration: 8,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
-      {/* Smaller accent orb */}
-      <motion.div
-        className="absolute w-[300px] h-[300px] rounded-full"
-        style={{
-          background: "radial-gradient(circle, rgba(120,120,180,0.1) 0%, transparent 70%)",
-          right: "10%",
-          bottom: "20%",
-        }}
-        animate={{
-          x: [0, 30, 0],
-          y: [0, -30, 0],
-          scale: [1, 1.1, 1],
-        }}
-        transition={{
-          duration: 10,
-          repeat: Infinity,
-          ease: "easeInOut",
         }}
       />
     </div>
@@ -102,13 +74,9 @@ export default function Login() {
               transition={{ duration: 1.5, repeat: Infinity }}
             />
           </div>
-          <motion.p
-            className="text-sm font-mono text-white/40 tracking-widest uppercase"
-            animate={{ opacity: [0.4, 0.8, 0.4] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
-            Initializing
-          </motion.p>
+          <p className="text-sm text-white/50">
+            Loading...
+          </p>
         </div>
       </div>
     );
@@ -117,7 +85,7 @@ export default function Login() {
   if (isAuthenticated && !user?.hasRequiredRole) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
-        <AnimatedOrbs />
+        <AmbientBackground />
         <motion.div
           initial={{ opacity: 0, y: 30, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -162,7 +130,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
-      <AnimatedOrbs />
+      <AmbientBackground />
 
       {/* Decorative grid lines */}
       <div className="absolute inset-0 opacity-[0.015]">
@@ -176,63 +144,29 @@ export default function Login() {
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 40, scale: 0.9 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
         className="relative z-10"
       >
-        <Card className="w-full max-w-md glass-card relative overflow-hidden group">
-          {/* Animated border glow */}
-          <motion.div
-            className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-            style={{
-              background: "linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%, rgba(255,255,255,0.05) 100%)",
-            }}
-          />
-
-          {/* Shimmer effect on hover */}
-          <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
-            <motion.div
-              className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"
-              style={{
-                background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent)",
-              }}
-            />
-          </div>
-
+        <Card className="w-full max-w-md glass-card relative overflow-hidden hover-border">
           <CardHeader className="text-center relative z-10 pb-2">
-            <motion.div
-              className="mx-auto w-24 h-24 rounded-2xl bg-gradient-to-br from-white/10 to-white/[0.02] flex items-center justify-center mb-6 border border-white/10 relative overflow-hidden"
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.3 }}
-            >
-              {/* Inner glow */}
-              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
+            <div className="mx-auto w-24 h-24 rounded-2xl bg-white/5 flex items-center justify-center mb-6 border border-white/10 overflow-hidden">
               <img
                 src="https://i.postimg.cc/GhG86pj9/dawg.png"
                 alt="Logo"
-                className="w-full h-full object-cover relative z-10"
+                className="w-full h-full object-cover"
               />
-              {/* Subtle pulse ring */}
-              <motion.div
-                className="absolute inset-0 rounded-2xl border border-white/20"
-                animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0, 0.5] }}
-                transition={{ duration: 3, repeat: Infinity }}
-              />
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-            >
-              <CardTitle className="text-3xl font-display text-gradient-shine mb-2">
+            <div>
+              <CardTitle className="text-3xl font-display text-gradient mb-2">
                 System Access
               </CardTitle>
               <CardDescription className="text-muted-foreground text-base">
                 Authenticate with Discord to access the dashboard
               </CardDescription>
-            </motion.div>
+            </div>
           </CardHeader>
 
           <CardContent className="space-y-5 relative z-10 pt-4">
@@ -266,12 +200,7 @@ export default function Login() {
               </motion.div>
             )}
 
-            <motion.div
-              className="space-y-4"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
-            >
+            <div className="space-y-4">
               <Button
                 onClick={login}
                 disabled={!isConfigured}
@@ -288,21 +217,16 @@ export default function Login() {
               </Button>
 
               <div className="flex items-center gap-2 justify-center text-xs text-muted-foreground">
-                <Shield className="w-3.5 h-3.5 text-white/30" />
-                <span className="tracking-wide">Role-based access required</span>
+                <Shield className="w-3.5 h-3.5 text-white/40" />
+                <span>Role-based access required</span>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div
-              className="pt-6 border-t border-white/5"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6, duration: 0.5 }}
-            >
-              <p className="text-xs text-muted-foreground text-center font-mono tracking-wide">
+            <div className="pt-6 border-t border-white/5">
+              <p className="text-xs text-muted-foreground text-center">
                 Access restricted to authorized Discord members only.
               </p>
-            </motion.div>
+            </div>
           </CardContent>
         </Card>
       </motion.div>

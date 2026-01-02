@@ -75,7 +75,7 @@ export function StatsCard({
         >
           <Icon className="w-5 h-5" />
         </motion.div>
-        <h3 className="text-xs font-medium text-white/40 uppercase tracking-widest">
+        <h3 className="text-xs font-medium text-white/50 tracking-wide">
           {title}
         </h3>
       </div>

@@ -8,7 +8,7 @@ import yt_dlp
 from spotipy.oauth2 import SpotifyClientCredentials
 import asyncio
 from discord import app_commands
-from datetime import timedelta
+from datetime import timedelta, datetime
 from discord.ext import commands, tasks
 import re
 from petpetgif import petpet
@@ -16,6 +16,7 @@ import io
 import time
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
+from langdetect import detect
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
@@ -45,13 +46,12 @@ bot_start_time = None
 bot_config = {
     "prefix": ",",
     "disabledCommands": [],
-    "allowedChannels": [1452216636819112010, 971303412849332226]
+    "allowedChannels": [1452216636819112010]
 }
 
 # Legacy constant for backwards compatibility
 ALLOWED_CHANNELS = [
     1452216636819112010,  #bot testing
-    971303412849332226
 ]
 # making this comment to save the state of the bot before i make a thousand changes lol -kfb
 print(f"Token available: {bool(TOKEN)}")
@@ -81,7 +81,11 @@ async def log_to_server(message, level="info", category="system"):
     """
     try:
         async with aiohttp.ClientSession() as session:
-            payload = {"message": message, "level": level, "category": category}
+            payload = {
+                "message": message,
+                "level": level,
+                "category": category
+            }
             async with session.post(API_URL,
                                     json=payload,
                                     headers=get_api_headers()) as response:
@@ -105,6 +109,12 @@ def get_uptime():
         return f"{hours}h {minutes}m"
     else:
         return f"{minutes}m"
+
+
+def is_command_disabled(command_name: str) -> bool:
+    """Check if a command is disabled in the bot config"""
+    disabled_commands = bot_config.get("disabledCommands", []) or []
+    return command_name in disabled_commands
 
 
 @tasks.loop(seconds=30)
@@ -191,10 +201,12 @@ async def on_ready():
     try:
         synced = await tree.sync()
         print(f"Synced {len(synced)} slash commands")
-        await log_to_server(f"Synced {len(synced)} slash commands", "info", "system")
+        await log_to_server(f"Synced {len(synced)} slash commands", "info",
+                            "system")
     except Exception as e:
         print(f"Slash command sync failed: {e}")
-        await log_to_server(f"Slash command sync failed: {e}", "error", "system")
+        await log_to_server(f"Slash command sync failed: {e}", "error",
+                            "system")
 
     # Start uptime status task
     bot_start_time = time.time()
@@ -236,12 +248,15 @@ async def on_message(message):
         ]:
             await message.channel.send(
                 "You are not allowed to use this command.")
-            await log_to_server(f"Unauthorized ,rapeon attempt by {message.author}", "warning", "command")
+            await log_to_server(
+                f"Unauthorized ,rapeon attempt by {message.author}", "warning",
+                "command")
             return
 
         bot.rape_enabled = True
         await message.channel.send("Rape mode ON😈")
-        await log_to_server(f"{message.author} enabled rape mode", "info", "command")
+        await log_to_server(f"{message.author} enabled rape mode", "info",
+                            "command")
         return
 
     if message.content.startswith(',rapeoff'):
@@ -250,13 +265,16 @@ async def on_message(message):
         ]:
             await message.channel.send(
                 "You are not allowed to use this command.")
-            await log_to_server(f"Unauthorized ,rapeoff attempt by {message.author}", "warning", "command")
+            await log_to_server(
+                f"Unauthorized ,rapeoff attempt by {message.author}",
+                "warning", "command")
             return
 
         bot.rape_enabled = False
         await message.channel.send(
             "Rape mode OFF <a:cr_asad:1166759175217487902>")
-        await log_to_server(f"{message.author} disabled rape mode", "info", "command")
+        await log_to_server(f"{message.author} disabled rape mode", "info",
+                            "command")
         return
 
     if message.content.startswith(',rape '):
@@ -366,7 +384,8 @@ async def on_message(message):
                             f'{target_user.mention} has been warned for: {reason}'
                         )
                         await log_to_server(
-                            f"{message.author} warned {target_user.name} (ID: {target_user.id}) for: {reason}", "warning", "moderation")
+                            f"{message.author} warned {target_user.name} (ID: {target_user.id}) for: {reason}",
+                            "warning", "moderation")
                     else:
                         await message.channel.send(
                             'Error: Failed to save warning')
@@ -414,7 +433,8 @@ async def on_message(message):
 
                         await message.channel.send(embed=embed)
                         await log_to_server(
-                            f"{message.author} viewed warns in {message.channel}", "info", "command")
+                            f"{message.author} viewed warns in {message.channel}",
+                            "info", "command")
                     else:
                         await message.channel.send(
                             'Error: Could not fetch warns')
@@ -442,8 +462,9 @@ async def on_message(message):
                 pass
 
             await message.channel.send(text_to_say)
-            await log_to_server(f"{message.author} used ,say command: {text_to_say[:100]}{'...' if len(text_to_say) > 100 else ''}",
-                                "info", "command")
+            await log_to_server(
+                f"{message.author} used ,say command: {text_to_say[:100]}{'...' if len(text_to_say) > 100 else ''}",
+                "info", "command")
         except Exception as e:
             print(f"Error with ,say command: {e}")
             await log_to_server(f"Error with ,say command: {e}", "error")
@@ -464,8 +485,8 @@ async def on_message(message):
                             embed.set_image(url=cat_url)
                             await message.channel.send(embed=embed)
                             await log_to_server(
-                                f"{message.author} used ,cat command",
-                                "info", "output")
+                                f"{message.author} used ,cat command", "info",
+                                "output")
         except Exception as e:
             print(f"Error fetching cat gif: {e}")
             await log_to_server(f"Error fetching cat gif: {e}", "error")
@@ -486,8 +507,8 @@ async def on_message(message):
                             embed.set_image(url=dog_url)
                             await message.channel.send(embed=embed)
                             await log_to_server(
-                                f"{message.author} used ,dog command",
-                                "info", "output")
+                                f"{message.author} used ,dog command", "info",
+                                "output")
         except Exception as e:
             print(f"Error fetching dog gif: {e}")
             await log_to_server(f"Error fetching dog gif: {e}", "error")
@@ -538,7 +559,8 @@ async def on_message(message):
 
             await message.channel.send(embed=embed)
             await log_to_server(
-                f"{author.name} used ,kiss command on {target_user.name}", "info", "output")
+                f"{author.name} used ,kiss command on {target_user.name}",
+                "info", "output")
         except Exception as e:
             print(f"Error with ,kiss command: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -655,11 +677,14 @@ async def on_message(message):
                     embed.set_image(url=image_url)
 
                     await message.channel.send(embed=embed)
-                    await log_to_server(f"{message.author} used ,crocodile command", "info", "output")
+                    await log_to_server(
+                        f"{message.author} used ,crocodile command", "info",
+                        "output")
         except Exception as e:
             print(f"Error with ,crocodile command: {e}")
             await message.channel.send(f"Error: {str(e)}")
-            await log_to_server(f"Error with ,crocodile command: {e}", "error", "command")
+            await log_to_server(f"Error with ,crocodile command: {e}", "error",
+                                "command")
 
     if message.content.startswith(',seal'):
         try:
@@ -707,9 +732,8 @@ async def on_message(message):
                     embed.set_image(url=image_url)
 
                     await message.channel.send(embed=embed)
-                    await log_to_server(
-                        f"{message.author} used ,seal command",
-                        "info", "output")
+                    await log_to_server(f"{message.author} used ,seal command",
+                                        "info", "output")
         except Exception as e:
             print(f"Error with ,seal command: {e}")
             await message.channel.send(f"Error: {str(e)}")
@@ -744,11 +768,14 @@ async def on_message(message):
             await message.channel.send(embed=embed,
                                        file=discord.File(dest,
                                                          filename="pet.gif"))
-            await log_to_server(f"{author.name} used ,pet command on {target.name}", "info", "output")
+            await log_to_server(
+                f"{author.name} used ,pet command on {target.name}", "info",
+                "output")
 
         except Exception as e:
             await message.channel.send(str(e))
-            await log_to_server(f"Error with ,pet command: {e}", "error", "command")
+            await log_to_server(f"Error with ,pet command: {e}", "error",
+                                "command")
 
     if message.content.startswith(',say2 '):
         try:
@@ -774,7 +801,8 @@ async def on_message(message):
             try:
                 await target_user.send(text_to_send)
                 await log_to_server(
-                    f"{message.author} used ,say2 to DM {target_user.name}: {text_to_send[:100]}{'...' if len(text_to_send) > 100 else ''}", "info", "command")
+                    f"{message.author} used ,say2 to DM {target_user.name}: {text_to_send[:100]}{'...' if len(text_to_send) > 100 else ''}",
+                    "info", "command")
             except discord.Forbidden:
                 await log_to_server(
                     f"Failed to send DM to {target_user} - DMs disabled",
@@ -819,8 +847,9 @@ async def on_message(message):
                                       reason="Timed out by bot command")
             await message.channel.send(
                 f'{target_user.mention} has been timed out for {duration_str}')
-            await log_to_server(f"{message.author} timed out {target_user.name} (ID: {target_user.id}) for {duration_str}",
-                                "warning", "moderation")
+            await log_to_server(
+                f"{message.author} timed out {target_user.name} (ID: {target_user.id}) for {duration_str}",
+                "warning", "moderation")
         except Exception as e:
             print(f"Error timing out user: {e}")
             await message.channel.send(f'Error: {str(e)}')
@@ -872,13 +901,16 @@ async def on_message(message):
             embed.set_image(url=gif_url)
 
             await message.channel.send(embed=embed)
-            await log_to_server(f"{author.name} used ,diddle command on {target.name}", "info", "output")
+            await log_to_server(
+                f"{author.name} used ,diddle command on {target.name}", "info",
+                "output")
 
         except Exception as e:
             print(f"Error with ,diddle command: {e}")
             await message.channel.send(
                 "Something went wrong while fetching the GIF.")
-            await log_to_server(f"Error with ,diddle command: {e}", "error", "command")
+            await log_to_server(f"Error with ,diddle command: {e}", "error",
+                                "command")
 
     if message.content.startswith(',fmset '):
         try:
@@ -1001,11 +1033,14 @@ async def on_message(message):
             await message.channel.send(embed=embed,
                                        file=discord.File(buffer,
                                                          filename="quote.png"))
-            await log_to_server(f"{message.author} used ,quote command on message by {author.name}", "info", "output")
+            await log_to_server(
+                f"{message.author} used ,quote command on message by {author.name}",
+                "info", "output")
 
         except Exception as e:
             await message.channel.send("Something went wrong while quoting.")
-            await log_to_server(f"Error with ,quote command: {e}", "error", "command")
+            await log_to_server(f"Error with ,quote command: {e}", "error",
+                                "command")
 
     if message.content.startswith(',fm'):
         try:
@@ -1156,7 +1191,8 @@ async def on_message(message):
 
     if re.search(r'\brape\b', message.content.lower()):
         try:
-            await message.channel.send("https://i.postimg.cc/Z5G9xTvx/rape.webp")
+            await message.channel.send(
+                "https://i.postimg.cc/Z5G9xTvx/rape.webp")
             await log_to_server(
                 f"Auto-response triggered by keyword in message from {message.author}",
                 "info", "output")
@@ -1167,7 +1203,9 @@ async def on_message(message):
     if re.search(r'\b(hi|hello|hey|wave)\b', message.content.lower()):
         try:
             await message.add_reaction('<a:wave:1166754943785500722>')
-            await log_to_server(f"Auto-reacted to greeting from {message.author}", "info", "output")
+            await log_to_server(
+                f"Auto-reacted to greeting from {message.author}", "info",
+                "output")
         except Exception as e:
             print(f"Error reacting to message: {e}")
             await log_to_server(f"Error reacting to message: {e}", "error")
@@ -1179,9 +1217,16 @@ async def on_message(message):
 async def youtube(interaction: discord.Interaction, link: str):
     await interaction.response.defer()
 
+    if is_command_disabled("youtube"):
+        await interaction.followup.send(
+            "The `youtube` command is currently disabled.")
+        return
+
     if "youtube.com" not in link and "youtu.be" not in link:
         await interaction.followup.send("Invalid YouTube link.")
-        await log_to_server(f"{interaction.user} used /youtube with invalid link", "warning", "command")
+        await log_to_server(
+            f"{interaction.user} used /youtube with invalid link", "warning",
+            "command")
         return
 
     await interaction.followup.send(f"[yt]({link})")
@@ -1193,13 +1238,20 @@ async def youtube(interaction: discord.Interaction, link: str):
     embed.description = f"[Download video (up to 720p)]({ss_download})\n[Upload downloaded video to catbox.moe for permanent share](https://catbox.moe/)"
 
     await interaction.followup.send(embed=embed)
-    await log_to_server(f"{interaction.user} used /youtube command with link: {link[:50]}{'...' if len(link) > 50 else ''}", "info", "command")
+    await log_to_server(
+        f"{interaction.user} used /youtube command with link: {link[:50]}{'...' if len(link) > 50 else ''}",
+        "info", "command")
 
 
 @tree.command(name="lumsearch", description="Search Google")
 @app_commands.describe(query="What do you want to search on Google?")
 async def search(interaction: discord.Interaction, query: str):
     await interaction.response.defer()
+
+    if is_command_disabled("lumsearch"):
+        await interaction.followup.send(
+            "The `lumsearch` command is currently disabled.")
+        return
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -1215,14 +1267,18 @@ async def search(interaction: discord.Interaction, query: str):
                 if resp.status != 200:
                     await interaction.followup.send(
                         "Error contacting Google API.")
-                    await log_to_server(f"/lumsearch API error for query '{query}' by {interaction.user}", "error", "command")
+                    await log_to_server(
+                        f"/lumsearch API error for query '{query}' by {interaction.user}",
+                        "error", "command")
                     return
                 data = await resp.json()
 
         items = data.get("items", [])
         if not items:
             await interaction.followup.send("No results found for your query.")
-            await log_to_server(f"{interaction.user} used /lumsearch with query '{query}' - no results", "info", "output")
+            await log_to_server(
+                f"{interaction.user} used /lumsearch with query '{query}' - no results",
+                "info", "output")
             return
 
         embed = discord.Embed(title="Google Results",
@@ -1238,12 +1294,16 @@ async def search(interaction: discord.Interaction, query: str):
                             inline=False)
 
         await interaction.followup.send(embed=embed)
-        await log_to_server(f"{interaction.user} used /lumsearch with query: {query[:100]}{'...' if len(query) > 100 else ''}", "info", "output")
+        await log_to_server(
+            f"{interaction.user} used /lumsearch with query: {query[:100]}{'...' if len(query) > 100 else ''}",
+            "info", "output")
 
     except Exception as e:
         print(f"/lumsearch error: {e}")
-        await interaction.followup.send("Something went wrong while searching.")
-        await log_to_server(f"Error with /lumsearch command: {e}", "error", "command")
+        await interaction.followup.send("Something went wrong while searching."
+                                        )
+        await log_to_server(f"Error with /lumsearch command: {e}", "error",
+                            "command")
 
 
 @tree.command(name="reel", description="embeds an insta reel of your choice")
@@ -1251,16 +1311,27 @@ async def search(interaction: discord.Interaction, query: str):
 async def reel(interaction: discord.Interaction, link: str):
     await interaction.response.defer()
 
+    if is_command_disabled("reel"):
+        await interaction.followup.send(
+            "The `reel` command is currently disabled.")
+        return
+
     modified_link = link.replace("instagram.com", "kkinstagram.com")
 
     await interaction.followup.send(f"[reel]({modified_link})")
-    await log_to_server(f"{interaction.user} used /reel command", "info", "output")
+    await log_to_server(f"{interaction.user} used /reel command", "info",
+                        "output")
 
 
 @tree.command(name="tiktok", description="embed tiktok url of your choice")
 @app_commands.describe(link="url")
 async def tiktok(interaction: discord.Interaction, link: str):
     await interaction.response.defer()
+
+    if is_command_disabled("tiktok"):
+        await interaction.followup.send(
+            "The `tiktok` command is currently disabled.")
+        return
 
     # modified_link = (
     # link.replace("vm.tiktok.com", "d.tnktok.com")
@@ -1271,7 +1342,8 @@ async def tiktok(interaction: discord.Interaction, link: str):
     modified_link = re.sub(r"https://.*\.tiktok", "https://d.tnktok", link)
 
     await interaction.followup.send(f"[tiktok]({modified_link})")
-    await log_to_server(f"{interaction.user} used /tiktok command", "info", "output")
+    await log_to_server(f"{interaction.user} used /tiktok command", "info",
+                        "output")
 
 
 yt_dlp.utils.bug_reports_message = lambda: ''
@@ -1284,6 +1356,11 @@ async def github(interaction: discord.Interaction,
                  query: str,
                  type: str = "repo"):
     await interaction.response.defer()
+
+    if is_command_disabled("github"):
+        await interaction.followup.send(
+            "The `github` command is currently disabled.")
+        return
 
     if type not in ["repo", "code", "user"]:
         await interaction.followup.send(
@@ -1340,18 +1417,26 @@ async def github(interaction: discord.Interaction,
                                 inline=False)
 
         await interaction.followup.send(embed=embed)
-        await log_to_server(f"{interaction.user} used /github to search {type}: {query[:100]}{'...' if len(query) > 100 else ''}", "info", "output")
+        await log_to_server(
+            f"{interaction.user} used /github to search {type}: {query[:100]}{'...' if len(query) > 100 else ''}",
+            "info", "output")
 
     except Exception as e:
         await interaction.followup.send(
             "Something went wrong while searching GitHub.")
-        await log_to_server(f"Error with /github command: {e}", "error", "command")
+        await log_to_server(f"Error with /github command: {e}", "error",
+                            "command")
 
 
 @tree.command(name="stackoverflow", description="search on stack overflow")
 @app_commands.describe(query="what do you want to search?")
 async def so(interaction: discord.Interaction, query: str):
     await interaction.response.defer()
+
+    if is_command_disabled("stackoverflow"):
+        await interaction.followup.send(
+            "The `stackoverflow` command is currently disabled.")
+        return
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -1391,18 +1476,26 @@ async def so(interaction: discord.Interaction, query: str):
                 inline=False)
 
         await interaction.followup.send(embed=embed)
-        await log_to_server(f"{interaction.user} used /stackoverflow with query: {query[:100]}{'...' if len(query) > 100 else ''}", "info", "output")
+        await log_to_server(
+            f"{interaction.user} used /stackoverflow with query: {query[:100]}{'...' if len(query) > 100 else ''}",
+            "info", "output")
 
     except Exception as e:
         await interaction.followup.send(
             "Something went wrong while searching Stack Overflow.")
-        await log_to_server(f"Error with /stackoverflow command: {e}", "error", "command")
+        await log_to_server(f"Error with /stackoverflow command: {e}", "error",
+                            "command")
 
 
 @tree.command(name="askgpt", description="ask chatgpt a question")
 @app_commands.describe(question="Your question:")
 async def askchatgpt(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
+
+    if is_command_disabled("askgpt"):
+        await interaction.followup.send(
+            "The `askgpt` command is currently disabled.")
+        return
 
     openai_key = os.getenv('OPENAI_API_KEY')
     if not openai_key:
@@ -1452,18 +1545,26 @@ async def askchatgpt(interaction: discord.Interaction, question: str):
         embed.set_footer(text=f"Asked by {interaction.user.display_name}")
 
         await interaction.followup.send(embed=embed)
-        await log_to_server(f"{interaction.user} used /askgpt with question: {question[:100]}{'...' if len(question) > 100 else ''}", "info", "output")
+        await log_to_server(
+            f"{interaction.user} used /askgpt with question: {question[:100]}{'...' if len(question) > 100 else ''}",
+            "info", "output")
 
     except Exception as e:
         await interaction.followup.send(
             "Something went wrong while asking ChatGPT.")
-        await log_to_server(f"Error with /askgpt command: {e}", "error", "command")
+        await log_to_server(f"Error with /askgpt command: {e}", "error",
+                            "command")
 
 
 @tree.command(name="askgrok", description="ask grok something")
 @app_commands.describe(question="your question")
 async def askgrok(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
+
+    if is_command_disabled("askgrok"):
+        await interaction.followup.send(
+            "The `askgrok` command is currently disabled.")
+        return
 
     grok_key = os.getenv('GROK_API_KEY')
     if not grok_key:
@@ -1503,11 +1604,99 @@ async def askgrok(interaction: discord.Interaction, question: str):
         embed.set_footer(text=f"Asked by {interaction.user.display_name}")
 
         await interaction.followup.send(embed=embed)
-        await log_to_server(f"{interaction.user} used /askgrok with question: {question[:100]}{'...' if len(question) > 100 else ''}", "info", "output")
+        await log_to_server(
+            f"{interaction.user} used /askgrok with question: {question[:100]}{'...' if len(question) > 100 else ''}",
+            "info", "output")
 
     except Exception as e:
         await interaction.followup.send(f"Error: {str(e)}")
-        await log_to_server(f"Error with /askgrok command: {e}", "error", "command")
+        await log_to_server(f"Error with /askgrok command: {e}", "error",
+                            "command")
+
+
+@tree.command(name="translate",
+              description="translate text of your choice to any language")
+@app_commands.describe(
+    text="text to translate",
+    target="target language code (e.g. en, es, fr, ja, ru) - default: en")
+async def translate(interaction: discord.Interaction,
+                    text: str,
+                    target: str = "en"):
+    await interaction.response.defer()
+
+    if is_command_disabled("translate"):
+        await interaction.followup.send(
+            "The `translate` command is currently disabled.")
+        return
+
+    try:
+        # Detect source language
+        try:
+            source_lang = detect(text)
+        except:
+            source_lang = "en"  # Default to English if detection fails
+
+        async with aiohttp.ClientSession() as session:
+            # free api (mymemory instead of libretranslate)
+            url = "https://api.mymemory.translated.net/get"
+            params = {
+                "q": text,
+                "langpair": f"{source_lang}|{target.lower()}"
+            }
+            async with session.get(url, params=params) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    await interaction.followup.send(
+                        f"Translation service error. Invalid language code or request.")
+                    await log_to_server(
+                        f"Translation API error: {resp.status} - {error_text}", "error",
+                        "command")
+                    return
+                data = await resp.json()
+
+        if data.get("responseStatus") != 200:
+            await interaction.followup.send("Translation failed. Please check the language code.")
+            await log_to_server(f"Translation API returned error: {data.get('responseDetails', 'Unknown error')}", "error", "command")
+            return
+
+        translated = data["responseData"]["translatedText"]
+
+        # Language flag emojis (common ones)
+        flags = {
+            "en": "🇬🇧",
+            "es": "🇪🇸",
+            "fr": "🇫🇷",
+            "de": "🇩🇪",
+            "it": "🇮🇹",
+            "pt": "🇵🇹",
+            "ru": "🇷🇺",
+            "ja": "🇯🇵",
+            "ko": "🇰🇷",
+            "zh": "🇨🇳",
+            "ar": "🇸🇦",
+            "hi": "🇮🇳",
+            "tr": "🇹🇷",
+            "pl": "🇵🇱",
+            "nl": "🇳🇱"
+        }
+        flag = flags.get(target.lower(), "🌐")
+
+        embed = discord.Embed(title=f"Translation {flag}", color=0x9b59b6)
+        embed.add_field(name="Original", value=text, inline=False)
+        embed.add_field(name=f"To {target.upper()}",
+                        value=translated,
+                        inline=False)
+
+        await interaction.followup.send(embed=embed)
+        await log_to_server(
+            f"{interaction.user} used /translate to translate text to {target}: '{text[:50]}{'...' if len(text) > 50 else ''}'",
+            "info", "output")
+
+    except Exception as e:
+        await interaction.followup.send(
+            "Something went wrong with translation.")
+        await log_to_server(f"Error with /translate command: {e}", "error",
+                            "command")
 
 
 ytdl_format_options = {
@@ -1562,6 +1751,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
 @app_commands.describe(query="Spotify track link or song name")
 async def playspotify(interaction: discord.Interaction, query: str):
     await interaction.response.defer()
+
+    if is_command_disabled("playspotify"):
+        await interaction.followup.send(
+            "The `playspotify` command is currently disabled.")
+        return
 
     if not interaction.user.voice:
         await interaction.followup.send("You must be in a voice channel.")
@@ -1620,15 +1814,23 @@ async def playspotify(interaction: discord.Interaction, query: str):
             vc.stop()
         vc.play(player)
         await interaction.followup.send(f"Now playing: **{player.title}**")
-        await log_to_server(f"{interaction.user} used /playspotify to play: {player.title}", "info", "output")
+        await log_to_server(
+            f"{interaction.user} used /playspotify to play: {player.title}",
+            "info", "output")
     except Exception as e:
         await interaction.followup.send(f"Playback error: {e}")
-        await log_to_server(f"Error with /playspotify command: {e}", "error", "command")
+        await log_to_server(f"Error with /playspotify command: {e}", "error",
+                            "command")
 
 
 @tree.command(name="stop", description="Stop music and disconnect")
 async def stop_music(interaction: discord.Interaction):
     await interaction.response.defer()
+
+    if is_command_disabled("stop"):
+        await interaction.followup.send(
+            "The `stop` command is currently disabled.")
+        return
 
     vc = interaction.guild.voice_client
     if not vc:
@@ -1640,19 +1842,29 @@ async def stop_music(interaction: discord.Interaction):
             vc.stop()
         await asyncio.wait_for(vc.disconnect(force=True), timeout=10)
         await interaction.followup.send("Disconnected.")
-        await log_to_server(f"{interaction.user} used /stop to disconnect from voice", "info", "command")
+        await log_to_server(
+            f"{interaction.user} used /stop to disconnect from voice", "info",
+            "command")
     except asyncio.TimeoutError:
         vc.cleanup()
         await interaction.followup.send("Disconnected.")
-        await log_to_server(f"{interaction.user} used /stop to disconnect from voice", "info", "command")
+        await log_to_server(
+            f"{interaction.user} used /stop to disconnect from voice", "info",
+            "command")
     except Exception as e:
         await interaction.followup.send(f"Disconnect error: {e}")
-        await log_to_server(f"Error with /stop command: {e}", "error", "command")
+        await log_to_server(f"Error with /stop command: {e}", "error",
+                            "command")
 
 
 @tree.command(name="info", description="shows bot info and commands list")
 async def info(interaction: discord.Interaction):
     await interaction.response.defer()
+
+    if is_command_disabled("info"):
+        await interaction.followup.send(
+            "The `info` command is currently disabled.")
+        return
 
     embed = discord.Embed(title="Bot Info", color=0x9b59b6)
     embed.set_author(name=interaction.client.user.name,
@@ -1671,12 +1883,18 @@ async def info(interaction: discord.Interaction):
     embed.set_footer(text="Made with love ❤️")
 
     await interaction.followup.send(embed=embed)
-    await log_to_server(f"{interaction.user} used /info command", "info", "command")
+    await log_to_server(f"{interaction.user} used /info command", "info",
+                        "command")
 
 
 @tree.command(name="nuke", description="fake nuke")
 async def nuke(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
+
+    if is_command_disabled("nuke"):
+        await interaction.followup.send(
+            "The `nuke` command is currently disabled.", ephemeral=True)
+        return
 
     await interaction.channel.send("🚨 **NUKE ACTIVATED** 🚨")
 
@@ -1704,7 +1922,8 @@ async def nuke(interaction: discord.Interaction):
 
     await asyncio.sleep(1.5)
     await interaction.channel.send("**jk server safe silly🥱**")
-    await log_to_server(f"{interaction.user} used /nuke command", "info", "command")
+    await log_to_server(f"{interaction.user} used /nuke command", "info",
+                        "command")
 
 
 @tree.command(name="ship", description="Ship two users")
@@ -1712,6 +1931,11 @@ async def nuke(interaction: discord.Interaction):
 async def ship(interaction: discord.Interaction, user1: discord.Member,
                user2: discord.Member):
     await interaction.response.defer()
+
+    if is_command_disabled("ship"):
+        await interaction.followup.send(
+            "The `ship` command is currently disabled.")
+        return
 
     if user1 == user2:
         await interaction.followup.send(
@@ -1732,8 +1956,10 @@ async def ship(interaction: discord.Interaction, user1: discord.Member,
         comment = "Fuh naw there no love in this block."
 
     try:
-        avatar1_url = user1.display_avatar.with_format("png").with_size(256).url
-        avatar2_url = user2.display_avatar.with_format("png").with_size(256).url
+        avatar1_url = user1.display_avatar.with_format("png").with_size(
+            256).url
+        avatar2_url = user2.display_avatar.with_format("png").with_size(
+            256).url
 
         async with aiohttp.ClientSession() as session:
             async with session.get(avatar1_url) as resp1:
@@ -1741,8 +1967,10 @@ async def ship(interaction: discord.Interaction, user1: discord.Member,
             async with session.get(avatar2_url) as resp2:
                 avatar2_bytes = await resp2.read()
 
-        avatar1 = Image.open(io.BytesIO(avatar1_bytes)).resize((256, 256)).convert("RGBA")
-        avatar2 = Image.open(io.BytesIO(avatar2_bytes)).resize((256, 256)).convert("RGBA")
+        avatar1 = Image.open(io.BytesIO(avatar1_bytes)).resize(
+            (256, 256)).convert("RGBA")
+        avatar2 = Image.open(io.BytesIO(avatar2_bytes)).resize(
+            (256, 256)).convert("RGBA")
 
         # Create image with space for both avatars and a plus sign
         img_width = 256 + 150 + 256  # avatar1 + space for + + avatar2
@@ -1760,9 +1988,11 @@ async def ship(interaction: discord.Interaction, user1: discord.Member,
         pink = (255, 105, 180)  # Hot pink color
 
         # Draw horizontal line of the +
-        draw.rectangle([plus_x - 40, plus_y - 15, plus_x + 40, plus_y + 15], fill=pink)
+        draw.rectangle([plus_x - 40, plus_y - 15, plus_x + 40, plus_y + 15],
+                       fill=pink)
         # Draw vertical line of the +
-        draw.rectangle([plus_x - 15, plus_y - 40, plus_x + 15, plus_y + 40], fill=pink)
+        draw.rectangle([plus_x - 15, plus_y - 40, plus_x + 15, plus_y + 40],
+                       fill=pink)
 
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -1774,13 +2004,245 @@ async def ship(interaction: discord.Interaction, user1: discord.Member,
         embed.set_image(url="attachment://ship.png")
 
         await interaction.followup.send(embed=embed,
-                                       file=discord.File(buffer, filename="ship.png"))
-        await log_to_server(f"{interaction.user} used /ship on {user1.name} and {user2.name}: {percent}%", "info", "output")
+                                        file=discord.File(buffer,
+                                                          filename="ship.png"))
+        await log_to_server(
+            f"{interaction.user} used /ship on {user1.name} and {user2.name}: {percent}%",
+            "info", "output")
 
     except Exception as e:
         print(f"Error with /ship command: {e}")
-        await interaction.followup.send("Something went wrong while creating the ship image.")
-        await log_to_server(f"Error with /ship command: {e}", "error", "command")
+        await interaction.followup.send(
+            "Something went wrong while creating the ship image.")
+        await log_to_server(f"Error with /ship command: {e}", "error",
+                            "command")
+
+
+reminders = {
+}  # Format: {user_id: [{"time": timestamp, "message": text, "channel_id": id}, ...]}
+
+
+def parse_time(input_str: str):
+    pattern = re.compile(r"(\d+)([smhdw])")
+    matches = pattern.findall(input_str.lower())
+    if not matches:
+        return None
+    total_seconds = 0
+    for amount, unit in matches:
+        amount = int(amount)
+        if unit == "s":
+            total_seconds += amount
+        elif unit == "m":
+            total_seconds += amount * 60
+        elif unit == "h":
+            total_seconds += amount * 3600
+        elif unit == "d":
+            total_seconds += amount * 86400
+        elif unit == "w":
+            total_seconds += amount * 604800
+    return total_seconds
+
+
+@tree.command(name="remindme", description="Set a reminder")
+@app_commands.describe(message="The reminder message",
+                       time="When should, I remind you like 1h, 30m, 2d?")
+async def remindme(interaction: discord.Interaction, message: str, time: str):
+    await interaction.response.defer()
+
+    if is_command_disabled("remindme"):
+        await interaction.followup.send(
+            "The `remindme` command is currently disabled.")
+        return
+
+    seconds = parse_time(time)
+    if not seconds or seconds < 30:
+        await interaction.followup.send(
+            "Invalid time format or too short (min 30s). Use like 1h, 30m, 2d."
+        )
+        return
+
+    remind_time = datetime.now() + timedelta(seconds=seconds)
+
+    user_id = interaction.user.id
+    if user_id not in reminders:
+        reminders[user_id] = []
+
+    reminders[user_id].append({
+        "time": remind_time.timestamp(),
+        "message": message,
+        "channel_id": interaction.channel_id
+    })
+
+    embed = discord.Embed(title="Reminder Set!", color=0x9b59b6)
+    embed.description = f"I'll remind you in **{time}**:\n**{message}**"
+    embed.set_footer(text=f"At {remind_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    await interaction.followup.send(embed=embed)
+
+    await asyncio.sleep(seconds)
+
+    embed = discord.Embed(title="⏰ Reminder!", color=0xff0000)
+    embed.description = f"**{message}**"
+    embed.set_footer(text=f"Set {time} ago")
+
+    try:
+        await interaction.user.send(embed=embed)
+    except:
+        channel = bot.get_channel(interaction.channel_id)
+        if channel:
+            await channel.send(
+                f"{interaction.user.mention} Reminder: **{message}**",
+                embed=embed)
+
+    reminders[user_id] = [
+        r for r in reminders[user_id] if r["time"] != remind_time.timestamp()
+    ]
+
+
+@tree.command(name="reminders", description="List your active reminders")
+async def reminders_list(interaction: discord.Interaction):
+    await interaction.response.defer()
+
+    if is_command_disabled("reminders"):
+        await interaction.followup.send(
+            "The `reminders` command is currently disabled.")
+        return
+
+    user_id = interaction.user.id
+    if user_id not in reminders or not reminders[user_id]:
+        await interaction.followup.send("You have no active reminders.")
+        return
+
+    embed = discord.Embed(title="Your Active Reminders", color=0x9b59b6)
+    for i, r in enumerate(reminders[user_id], 1):
+        remind_time = datetime.fromtimestamp(r["time"])
+        embed.add_field(name=f"{i}. {r['message']}",
+                        value=f"<t:{int(r['time'])}:R>",
+                        inline=False)
+
+    await interaction.followup.send(embed=embed)
+
+
+@tree.command(
+    name="meme",
+    description="search a meme on google images and add (optional) text to it")
+@app_commands.describe(query="meme template to search for",
+                       top="text at the top (optional)",
+                       bottom="text at the bottom (optional)")
+async def meme(interaction: discord.Interaction,
+               query: str,
+               top: str = "",
+               bottom: str = ""):
+    await interaction.response.defer()
+
+    if is_command_disabled("meme"):
+        await interaction.followup.send(
+            "The `meme` command is currently disabled.")
+        return
+
+    try:
+        params = {
+            "key": GOOGLE_API_KEY,
+            "cx": CSE_ID,
+            "q": f"{query} meme template",
+            "searchType": "image",
+            "num": 10,
+            "fileType": "png,jpg"
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                    "https://www.googleapis.com/customsearch/v1",
+                    params=params) as resp:
+                if resp.status != 200:
+                    await interaction.followup.send(
+                        "Failed to search for meme template.")
+                    await log_to_server(
+                        f"Meme template search failed: {resp.status}", "error",
+                        "command")
+                    return
+                data = await resp.json()
+
+            items = data.get("items", [])
+            if not items:
+                await interaction.followup.send("No meme templates found.")
+                return
+
+            template_url = items[0]["link"]
+
+            async with session.get(template_url) as img_resp:
+                if img_resp.status != 200:
+                    await interaction.followup.send(
+                        "Failed to download template.")
+                    await log_to_server(
+                        f"Meme template download failed: {img_resp.status}",
+                        "error", "command")
+                    return
+                template_data = await img_resp.read()
+
+        img = Image.open(io.BytesIO(template_data)).convert("RGB")
+        draw = ImageDraw.Draw(img)
+
+        width, height = img.size
+
+        # Scale font size based on image height (8% of height)
+        font_size = int(height * 0.08)
+
+        try:
+            font = ImageFont.truetype("impact.ttf", font_size)
+        except:
+            try:
+                font = ImageFont.truetype(
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                    font_size)
+            except:
+                font = ImageFont.load_default()
+
+        def draw_text(text, y_position):
+            if not text:
+                return
+            # Scale wrap width based on image width
+            chars_per_line = max(15, int(width / (font_size * 0.6)))
+            wrapped = textwrap.fill(text, width=chars_per_line)
+            lines = wrapped.split("\n")
+            line_height = draw.textbbox((0, 0), "A", font=font)[3]
+            total_height = len(lines) * line_height
+            start_y = y_position - total_height // 2
+
+            for line in lines:
+                bbox = draw.textbbox((0, 0), line, font=font)
+                text_width = bbox[2] - bbox[0]
+                x = (width - text_width) // 2
+                draw.text((x + 2, start_y + 2),
+                          line,
+                          font=font,
+                          fill=(0, 0, 0))
+                draw.text((x, start_y), line, font=font, fill=(255, 255, 255))
+                start_y += line_height
+
+        draw_text(top, height * 0.15)
+        draw_text(bottom, height * 0.85)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+
+        embed = discord.Embed(color=0x9b59b6)
+        embed.set_image(url="attachment://meme.png")
+
+        await interaction.followup.send(embed=embed,
+                                        file=discord.File(buffer,
+                                                          filename="meme.png"))
+        await log_to_server(
+            f"{interaction.user} used /meme command with query='{query[:50]}' top='{top[:50]}' bottom='{bottom[:50]}'",
+            "info", "output")
+
+    except Exception as e:
+        print(f"Error with /meme command: {e}")
+        await interaction.followup.send(
+            "Something went wrong generating the meme.")
+        await log_to_server(f"Error with /meme command: {e}", "error",
+                            "command")
 
 
 CHANNEL_ID = 1452216636819112010

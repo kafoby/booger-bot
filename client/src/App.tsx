@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { motion } from "framer-motion";
-import { useMemo } from "react";
 import Dashboard from "@/pages/Dashboard";
 import Login from "@/pages/Login";
 import Config from "@/pages/Config";
@@ -13,49 +12,7 @@ import Performance from "@/pages/Performance";
 import Users from "@/pages/Users";
 import NotFound from "@/pages/not-found";
 
-// Floating particles background component - memoized to prevent re-renders
-function FloatingParticles() {
-  const particles = useMemo(() => {
-    return [...Array(20)].map((_, i) => ({
-      id: i,
-      width: Math.random() * 300 + 50,
-      height: Math.random() * 300 + 50,
-      left: `${Math.random() * 100}%`,
-      top: `${Math.random() * 100}%`,
-      xMove: Math.random() * 100 - 50,
-      yMove: Math.random() * 100 - 50,
-      duration: Math.random() * 20 + 15,
-    }));
-  }, []);
-
-  return (
-    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-      {particles.map((p) => (
-        <motion.div
-          key={p.id}
-          className="absolute rounded-full bg-white/[0.02]"
-          style={{
-            width: p.width,
-            height: p.height,
-            left: p.left,
-            top: p.top,
-          }}
-          animate={{
-            x: [0, p.xMove, 0],
-            y: [0, p.yMove, 0],
-            scale: [1, 1.1, 1],
-            opacity: [0.02, 0.05, 0.02],
-          }}
-          transition={{
-            duration: p.duration,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
+// Removed FloatingParticles - too AI-generic and mechanical
 
 function LoadingSpinner() {
   return (
@@ -132,7 +89,6 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
-          <FloatingParticles />
           <Router />
           <Toaster />
         </TooltipProvider>
