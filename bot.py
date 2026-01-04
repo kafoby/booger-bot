@@ -16,7 +16,6 @@ import io
 import time
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
-from langdetect import detect
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
@@ -51,7 +50,7 @@ bot_config = {
 
 # Legacy constant for backwards compatibility
 ALLOWED_CHANNELS = [
-    1452216636819112010,  #bot testing
+    #1452216636819112010,  #bot testing
 ]
 # making this comment to save the state of the bot before i make a thousand changes lol -kfb
 print(f"Token available: {bool(TOKEN)}")
@@ -1614,11 +1613,10 @@ async def askgrok(interaction: discord.Interaction, question: str):
                             "command")
 
 
-@tree.command(name="translate",
-              description="translate text of your choice to any language")
+@tree.command(name="translate", description="translate text of your choice")
 @app_commands.describe(
     text="text to translate",
-    target="target language code (e.g. en, es, fr, ja, ru) - default: en")
+    target="target language code (e.g. en, es, fr, ja) - default: en")
 async def translate(interaction: discord.Interaction,
                     text: str,
                     target: str = "en"):
@@ -1630,54 +1628,38 @@ async def translate(interaction: discord.Interaction,
         return
 
     try:
-        # Detect source language
-        try:
-            source_lang = detect(text)
-        except:
-            source_lang = "en"  # Default to English if detection fails
+        params = {
+            "client": "gtx",
+            "sl": "auto",
+            "tl": target.lower(),
+            "dt": "t",
+            "q": text
+        }
 
         async with aiohttp.ClientSession() as session:
-            # free api (mymemory instead of libretranslate)
-            url = "https://api.mymemory.translated.net/get"
-            params = {
-                "q": text,
-                "langpair": f"{source_lang}|{target.lower()}"
-            }
-            async with session.get(url, params=params) as resp:
+            async with session.get(
+                    "https://translate.googleapis.com/translate_a/single",
+                    params=params) as resp:  #no more libretranslate
                 if resp.status != 200:
-                    error_text = await resp.text()
-                    await interaction.followup.send(
-                        f"Translation service error. Invalid language code or request.")
+                    await interaction.followup.send("Translation error.")
                     await log_to_server(
-                        f"Translation API error: {resp.status} - {error_text}", "error",
+                        f"Translation API error: {resp.status}", "error",
                         "command")
                     return
                 data = await resp.json()
 
-        if data.get("responseStatus") != 200:
-            await interaction.followup.send("Translation failed. Please check the language code.")
-            await log_to_server(f"Translation API returned error: {data.get('responseDetails', 'Unknown error')}", "error", "command")
-            return
+        translated = "".join(
+            [sentence[0] for sentence in data[0] if sentence[0]])
 
-        translated = data["responseData"]["translatedText"]
-
-        # Language flag emojis (common ones)
         flags = {
             "en": "🇬🇧",
             "es": "🇪🇸",
             "fr": "🇫🇷",
             "de": "🇩🇪",
-            "it": "🇮🇹",
-            "pt": "🇵🇹",
-            "ru": "🇷🇺",
             "ja": "🇯🇵",
-            "ko": "🇰🇷",
+            "ru": "🇷🇺",
             "zh": "🇨🇳",
-            "ar": "🇸🇦",
-            "hi": "🇮🇳",
-            "tr": "🇹🇷",
-            "pl": "🇵🇱",
-            "nl": "🇳🇱"
+            "ar": "🇸🇦"
         }
         flag = flags.get(target.lower(), "🌐")
 
@@ -1869,7 +1851,7 @@ async def info(interaction: discord.Interaction):
     embed = discord.Embed(title="Bot Info", color=0x9b59b6)
     embed.set_author(name=interaction.client.user.name,
                      icon_url=interaction.client.user.display_avatar.url)
-    embed.description = "A retarded Discord bot made by lumiin4, forgor0x10 and kfb"
+    embed.description = "A retarded Discord bot made by lumiin4 and kfb"
     embed.add_field(
         name="Commands List",
         value=
@@ -2121,6 +2103,118 @@ async def reminders_list(interaction: discord.Interaction):
                         inline=False)
 
     await interaction.followup.send(embed=embed)
+
+
+@tree.command(name="weather", description="get current weather for a location")
+@app_commands.describe(location="city name (e.g. London, New York)")
+async def weather(interaction: discord.Interaction, location: str):
+    await interaction.response.defer()
+
+    if is_command_disabled("weather"):
+        await interaction.followup.send(
+            "The `weather` command is currently disabled.")
+        return
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # First, geocode the location to get coordinates
+            geocode_params = {
+                "name": location,
+                "count": 1,
+                "language": "en",
+                "format": "json"
+            }
+            async with session.get(
+                    "https://geocoding-api.open-meteo.com/v1/search",
+                    params=geocode_params) as geo_resp:
+                if geo_resp.status != 200:
+                    await interaction.followup.send("Failed to find location.")
+                    await log_to_server(
+                        f"Weather geocoding error: {geo_resp.status}", "error",
+                        "command")
+                    return
+                geo_data = await geo_resp.json()
+
+            if not geo_data.get("results"):
+                await interaction.followup.send(
+                    f"Location '{location}' not found.")
+                return
+
+            result = geo_data["results"][0]
+            lat = result["latitude"]
+            lon = result["longitude"]
+            city_name = result["name"]
+            country = result.get("country", "")
+
+            # Now get weather data
+            weather_params = {
+                "latitude": lat,
+                "longitude": lon,
+                "current":
+                "temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m",
+                "temperature_unit": "celsius",
+                "wind_speed_unit": "kmh",
+                "timezone": "auto"
+            }
+            async with session.get("https://api.open-meteo.com/v1/forecast",
+                                   params=weather_params) as weather_resp:
+                if weather_resp.status != 200:
+                    await interaction.followup.send(
+                        "Failed to fetch weather data.")
+                    await log_to_server(
+                        f"Weather API error: {weather_resp.status}", "error",
+                        "command")
+                    return
+                data = await weather_resp.json()
+
+        current = data["current"]
+        temp = current["temperature_2m"]
+        humidity = current["relative_humidity_2m"]
+        wind = current["wind_speed_10m"]
+        code = current["weather_code"]
+
+        weather_descriptions = {
+            0: "Clear sky ☀️",
+            1: "Mainly clear ☀️",
+            2: "Partly cloudy ⛅",
+            3: "Overcast ☁️",
+            45: "Fog 🌫️",
+            48: "Depositing rime fog 🌫️",
+            51: "Light drizzle 🌧️",
+            53: "Moderate drizzle 🌧️",
+            55: "Dense drizzle 🌧️",
+            61: "Slight rain 🌧️",
+            63: "Moderate rain 🌧️",
+            65: "Heavy rain 🌧️",
+            71: "Slight snow ❄️",
+            73: "Moderate snow ❄️",
+            75: "Heavy snow ❄️",
+            80: "Slight rain showers 🌦️",
+            81: "Moderate rain showers 🌦️",
+            82: "Violent rain showers 🌦️",
+            95: "Thunderstorm ⛈️"
+        }
+        description = weather_descriptions.get(code, "Unknown")
+
+        location_display = f"{city_name}, {country}" if country else city_name
+        embed = discord.Embed(title=f"Weather in {location_display}",
+                              color=0x9b59b6)
+        embed.add_field(name="Temperature", value=f"{temp}°C", inline=True)
+        embed.add_field(name="Condition", value=description, inline=True)
+        embed.add_field(name="Humidity", value=f"{humidity}%", inline=True)
+        embed.add_field(name="Wind Speed", value=f"{wind} km/h", inline=True)
+
+        await interaction.followup.send(embed=embed)
+        await log_to_server(
+            f"{interaction.user} used /weather for location: {location}",
+            "info", "output")
+
+    except Exception as e:
+        print(f"Error with /weather command: {e}")
+        await interaction.followup.send(
+            "Location not found or error fetching weather.")
+        await log_to_server(f"Error with /weather command: {e}", "error",
+                            "command")
 
 
 @tree.command(
