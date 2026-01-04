@@ -19,7 +19,7 @@ Refactor the monolithic 2376-line `bot.py` into a modular architecture using Dis
 
 ```
 /home/runner/workspace/
-├── bot.py                      # Entry point (50-100 lines)
+├── bot.py                      # Entry point
 ├── config/
 │   ├── settings.py             # Centralized config management
 │   └── constants.py            # Channel IDs, user IDs, etc.
