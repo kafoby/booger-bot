@@ -11,6 +11,7 @@ class DiscordBot(commands.Bot):
         intents.messages = True
         intents.guilds = True
         intents.members = True
+        intents.voice_states = True
         
         super().__init__(
             command_prefix=self._get_prefix,
@@ -36,6 +37,7 @@ class DiscordBot(commands.Bot):
         await self.load_extension('cogs.memes')
         await self.load_extension('cogs.admin')
         await self.load_extension('cogs.music')
+        await self.load_extension('cogs.voice')
 
         # Sync slash commands
         try:
