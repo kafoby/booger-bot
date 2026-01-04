@@ -72,6 +72,7 @@ class Voice(commands.Cog):
         # Handle cleanup of empty custom voice channels
         if (before.channel and
             before.channel.category_id == CUSTOM_VC_CATEGORY_ID and
+            before.channel.id != JOIN_TO_CREATE_CHANNEL_ID and
             len(before.channel.members) == 0):
 
             try:
