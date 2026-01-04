@@ -169,8 +169,7 @@ class Fun(commands.Cog):
             buffer = await self._create_ship_image(user1, user2)
             embed = EmbedBuilder.create_embed(
                 title=f"{user1.name} ❤️ {user2.name}",
-                description=f"Ship Percentage: {percent}%
-{comment}",
+                description=f"Ship Percentage: {percent}%\n{comment}",
                 image_url="attachment://ship.png"
             )
 

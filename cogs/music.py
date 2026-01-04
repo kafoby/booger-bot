@@ -4,6 +4,7 @@ from discord.ext import commands
 import aiohttp
 import asyncio
 import yt_dlp
+from yt_dlp import utils as yt_dlp_utils
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import urllib.parse
@@ -31,7 +32,7 @@ ffmpeg_options = {
 }
 
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
-ytdl.utils.bug_reports_message = lambda: ''
+yt_dlp_utils.bug_reports_message = lambda: ''
 
 # Spotify setup
 SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')

@@ -16,7 +16,8 @@
       "Bash(pkill:*)",
       "Bash(pip install:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(python main.py:*)"
     ]
   }
 }
