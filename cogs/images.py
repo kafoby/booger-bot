@@ -1,6 +1,9 @@
 import discord
 from discord.ext import commands
 import random
+import io
+import aiohttp
+from petpetgif import petpet
 from config.settings import config
 from utils.logging import BotLogger
 from utils.embed_builder import EmbedBuilder
@@ -10,6 +13,42 @@ from services.google_search import GoogleSearchService
 class Images(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(name="pet")
+    async def pet(self, ctx):
+        if config.is_command_disabled("pet"):
+            await ctx.send("The `pet` command is currently disabled.")
+            return
+
+        try:
+            if not ctx.message.mentions:
+                await ctx.send("Mention a user to pet")
+                return
+
+            target = ctx.message.mentions[0]
+            author = ctx.author
+
+            avatar_url = target.display_avatar.with_format("png").with_size(512).url
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(avatar_url) as resp:
+                    avatar_bytes = await resp.read()
+
+            source = io.BytesIO(avatar_bytes)
+            dest = io.BytesIO()
+
+            petpet.make(source, dest)
+            dest.seek(0)
+
+            embed = EmbedBuilder.create_embed(title=f"{author.name} pets {target.name}")
+            embed.set_image(url="attachment://pet.gif")
+
+            await ctx.send(embed=embed, file=discord.File(dest, filename="pet.gif"))
+            await BotLogger.log(f"{author.name} used ,pet command on {target.name}", "info", "output")
+
+        except Exception as e:
+            await BotLogger.log_error("Error with ,pet command", e, "command")
+            await ctx.send(str(e))
 
     @commands.command(name="cat")
     async def cat(self, ctx):

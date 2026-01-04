@@ -45,49 +45,49 @@ bot_config = BotConfigProxy()
 
 ALLOWED_CHANNELS = config.allowed_channels
 
-print(f"Token available: {bool(TOKEN)}")
+# print(f"Token available: {bool(TOKEN)}")
 
 bot = DiscordBot()
 tree = bot.tree
 
-print("Discord bot initialized")
+# print("Discord bot initialized")
 
 
-async def log_to_server(message, level="info", category="system"):
-    """Send log to the web server API"""
-    await BotLogger.log(message, level, category)
+# async def log_to_server(message, level="info", category="system"):
+#     """Send log to the web server API"""
+#     await BotLogger.log(message, level, category)
 
 
 
 
 
-@bot.event
-async def on_message(message):
-
-    if message.author == bot.user:
-        return
-
-    # Use dynamic config for allowed channels, fallback to legacy constant
-    allowed_channels = bot_config.get("allowedChannels",
-                                      []) or ALLOWED_CHANNELS
-    if allowed_channels and message.channel.id not in allowed_channels:
-        print(f"Ignored message in non-allowed channel: {message.content}")
-        return
-
-    # Check if command is disabled
-    content = message.content
-    prefix = config.prefix
-    if content.startswith(prefix):
-        command_name = content[len(prefix):].split()[0].lower(
-        ) if content[len(prefix):].split() else ""
-        if config.is_command_disabled(command_name):
-            await message.channel.send(
-                f"The `{command_name}` command is currently disabled.")
-            return
-
-    msg = f"Received message from {message.author}: {message.content}"
-    print(msg)
-    await log_to_server(msg, "info", "message")
+# @bot.event
+# async def on_message(message):
+#
+#     if message.author == bot.user:
+#         return
+#
+#     # Use dynamic config for allowed channels, fallback to legacy constant
+#     allowed_channels = bot_config.get("allowedChannels",
+#                                       []) or ALLOWED_CHANNELS
+#     if allowed_channels and message.channel.id not in allowed_channels:
+#         # print(f"Ignored message in non-allowed channel: {message.content}")
+#         return
+#
+#     # Check if command is disabled
+#     content = message.content
+#     prefix = config.prefix
+#     if content.startswith(prefix):
+#         command_name = content[len(prefix):].split()[0].lower(
+#         ) if content[len(prefix):].split() else ""
+#         if config.is_command_disabled(command_name):
+#             await message.channel.send(
+#                 f"The `{command_name}` command is currently disabled.")
+#             return
+#
+#     msg = f"Received message from {message.author}: {message.content}"
+#     # print(msg)
+#     await log_to_server(msg, "info", "message")
 
     # Migrated to cogs/admin.py
     # if message.content.startswith(',rapeon'):
@@ -587,43 +587,44 @@ async def on_message(message):
     #         await message.channel.send(f"Error: {str(e)}")
     #         await log_to_server(f"Error with ,seal command: {e}", "error")
 
-    if message.content.startswith(",pet "):
-        try:
-            if not message.mentions:
-                await message.channel.send("Mention a user to pet")
-                return
-
-            target = message.mentions[0]
-            author = message.author
-
-            avatar_url = target.display_avatar.with_format("png").with_size(
-                512).url
-
-            async with aiohttp.ClientSession() as session:
-                async with session.get(avatar_url) as resp:
-                    avatar_bytes = await resp.read()
-
-            source = io.BytesIO(avatar_bytes)
-            dest = io.BytesIO()
-
-            petpet.make(source, dest)
-            dest.seek(0)
-
-            embed = discord.Embed(title=f"{author.name} pets {target.name}",
-                                  color=0x9b59b6)
-            embed.set_image(url="attachment://pet.gif")
-
-            await message.channel.send(embed=embed,
-                                       file=discord.File(dest,
-                                                         filename="pet.gif"))
-            await log_to_server(
-                f"{author.name} used ,pet command on {target.name}", "info",
-                "output")
-
-        except Exception as e:
-            await message.channel.send(str(e))
-            await log_to_server(f"Error with ,pet command: {e}", "error",
-                                "command")
+    # Migrated to cogs/images.py
+    # if message.content.startswith(",pet "):
+    #     try:
+    #         if not message.mentions:
+    #             await message.channel.send("Mention a user to pet")
+    #             return
+    #
+    #         target = message.mentions[0]
+    #         author = message.author
+    #
+    #         avatar_url = target.display_avatar.with_format("png").with_size(
+    #             512).url
+    #
+    #         async with aiohttp.ClientSession() as session:
+    #             async with session.get(avatar_url) as resp:
+    #                 avatar_bytes = await resp.read()
+    #
+    #         source = io.BytesIO(avatar_bytes)
+    #         dest = io.BytesIO()
+    #
+    #         petpet.make(source, dest)
+    #         dest.seek(0)
+    #
+    #         embed = discord.Embed(title=f"{author.name} pets {target.name}",
+    #                               color=0x9b59b6)
+    #         embed.set_image(url="attachment://pet.gif")
+    #
+    #         await message.channel.send(embed=embed,
+    #                                    file=discord.File(dest,
+    #                                                      filename="pet.gif"))
+    #         await log_to_server(
+    #             f"{author.name} used ,pet command on {target.name}", "info",
+    #             "output")
+    #
+    #     except Exception as e:
+    #         await message.channel.send(str(e))
+    #         await log_to_server(f"Error with ,pet command: {e}", "error",
+    #                             "command")
 
     # Migrated to cogs/utility.py
     # if message.content.startswith(',say2 '):
