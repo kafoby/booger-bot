@@ -14,7 +14,9 @@
       "Bash(python3:*)",
       "Bash(lsof:*)",
       "Bash(pkill:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
