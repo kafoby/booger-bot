@@ -75,7 +75,7 @@ class Levels(commands.Cog):
                         title="Level Up!",
                         color=0x9b59b6
                     )
-                    embed.description = f"{message.author.mention} reached **Level {levels[user_id]['level']}** :boogerchaos:"
+                    embed.description = f"{message.author.mention} reached **Level {levels[user_id]['level']}**"
                     embed.set_thumbnail(url=message.author.display_avatar.url)
 
                     await channel.send(embed=embed)
