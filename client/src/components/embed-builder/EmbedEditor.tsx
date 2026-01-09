@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
@@ -27,6 +26,7 @@ import {
   User,
   MessageSquare,
 } from "lucide-react";
+import { VariableInput } from "./VariableInput";
 import { useCreateEmbedTemplate, useUpdateEmbedTemplate } from "@/hooks/use-embed-templates";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -263,19 +263,20 @@ export default function EmbedEditor({
             </div>
             <div className="space-y-2">
               <Label className="text-xs text-white/60">Title</Label>
-              <Input
+              <VariableInput
                 value={embedData.title || ""}
-                onChange={(e) => setEmbedData({ ...embedData, title: e.target.value })}
+                onChange={(value) => setEmbedData({ ...embedData, title: value })}
                 placeholder="Use {variables} for dynamic content"
                 className="bg-white/5 border-white/10 rounded-lg font-mono text-sm"
               />
             </div>
             <div className="space-y-2">
               <Label className="text-xs text-white/60">Description</Label>
-              <Textarea
+              <VariableInput
+                multiline
                 value={embedData.description || ""}
-                onChange={(e) =>
-                  setEmbedData({ ...embedData, description: e.target.value })
+                onChange={(value) =>
+                  setEmbedData({ ...embedData, description: value })
                 }
                 placeholder="Supports {variables} and **markdown**"
                 className="bg-white/5 border-white/10 rounded-lg font-mono text-sm min-h-[100px]"
@@ -306,9 +307,9 @@ export default function EmbedEditor({
                   <LinkIcon className="h-3.5 w-3.5" />
                   URL
                 </Label>
-                <Input
+                <VariableInput
                   value={embedData.url || ""}
-                  onChange={(e) => setEmbedData({ ...embedData, url: e.target.value })}
+                  onChange={(value) => setEmbedData({ ...embedData, url: value })}
                   placeholder="https://..."
                   className="bg-white/5 border-white/10 rounded-lg font-mono text-sm"
                 />
@@ -327,12 +328,12 @@ export default function EmbedEditor({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs text-white/60">Name</Label>
-                <Input
+                <VariableInput
                   value={embedData.author?.name || ""}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setEmbedData({
                       ...embedData,
-                      author: { ...embedData.author, name: e.target.value },
+                      author: { ...embedData.author, name: value },
                     })
                   }
                   placeholder="{user.name}"
@@ -341,12 +342,12 @@ export default function EmbedEditor({
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-white/60">Icon URL</Label>
-                <Input
+                <VariableInput
                   value={embedData.author?.icon_url || ""}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setEmbedData({
                       ...embedData,
-                      author: { ...embedData.author, icon_url: e.target.value },
+                      author: { ...embedData.author, icon_url: value },
                     })
                   }
                   placeholder="{user.display_avatar.url}"
@@ -367,12 +368,12 @@ export default function EmbedEditor({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs text-white/60">Thumbnail URL</Label>
-                <Input
+                <VariableInput
                   value={embedData.thumbnail?.url || ""}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setEmbedData({
                       ...embedData,
-                      thumbnail: { url: e.target.value },
+                      thumbnail: { url: value },
                     })
                   }
                   placeholder="{user.display_avatar.url}"
@@ -381,12 +382,12 @@ export default function EmbedEditor({
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-white/60">Image URL</Label>
-                <Input
+                <VariableInput
                   value={embedData.image?.url || ""}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setEmbedData({
                       ...embedData,
-                      image: { url: e.target.value },
+                      image: { url: value },
                     })
                   }
                   placeholder="https://..."
@@ -407,12 +408,12 @@ export default function EmbedEditor({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs text-white/60">Text</Label>
-                <Input
+                <VariableInput
                   value={embedData.footer?.text || ""}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setEmbedData({
                       ...embedData,
-                      footer: { ...embedData.footer, text: e.target.value },
+                      footer: { ...embedData.footer, text: value },
                     })
                   }
                   placeholder="Footer text"
@@ -421,12 +422,12 @@ export default function EmbedEditor({
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-white/60">Icon URL</Label>
-                <Input
+                <VariableInput
                   value={embedData.footer?.icon_url || ""}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setEmbedData({
                       ...embedData,
-                      footer: { ...embedData.footer, icon_url: e.target.value },
+                      footer: { ...embedData.footer, icon_url: value },
                     })
                   }
                   placeholder="https://..."
@@ -478,15 +479,16 @@ export default function EmbedEditor({
                     </Button>
                   </div>
                   <div className="space-y-2">
-                    <Input
+                    <VariableInput
                       value={field.name}
-                      onChange={(e) => updateField(index, "name", e.target.value)}
+                      onChange={(value) => updateField(index, "name", value)}
                       placeholder="Field name"
                       className="bg-white/5 border-white/10 rounded-lg font-mono text-sm"
                     />
-                    <Textarea
+                    <VariableInput
+                      multiline
                       value={field.value}
-                      onChange={(e) => updateField(index, "value", e.target.value)}
+                      onChange={(value) => updateField(index, "value", value)}
                       placeholder="Field value"
                       className="bg-white/5 border-white/10 rounded-lg font-mono text-sm min-h-[60px]"
                     />
