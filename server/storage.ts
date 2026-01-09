@@ -1,10 +1,13 @@
 import { db } from "./db";
 import {
   logs, warns, lfmConnections, users, botStatus, botConfig, adminUsers, authBypassUsers, searchPresets,
+  embedTemplates, commandTemplateMappings,
   type InsertLog, type Log, type InsertWarn, type Warn,
   type InsertLfmConnection, type LfmConnection, type User, type InsertUser,
   type BotStatus, type BotConfig, type AdminUser, type AuthBypassUser,
-  type SearchPreset, type InsertSearchPreset
+  type SearchPreset, type InsertSearchPreset,
+  type EmbedTemplate, type InsertEmbedTemplate,
+  type CommandTemplateMapping, type InsertCommandTemplateMapping
 } from "@shared/schema";
 import { eq, desc, count, sql, and, gte, lte } from "drizzle-orm";
 
@@ -97,6 +100,19 @@ export interface IStorage {
   // Performance and analytics methods
   getPerformanceMetrics(): Promise<PerformanceMetrics>;
   getUserActivity(): Promise<UserActivity>;
+  // Embed template methods
+  getEmbedTemplates(): Promise<EmbedTemplate[]>;
+  getEmbedTemplate(id: number): Promise<EmbedTemplate | undefined>;
+  getEmbedTemplateByName(name: string): Promise<EmbedTemplate | undefined>;
+  createEmbedTemplate(template: InsertEmbedTemplate): Promise<EmbedTemplate>;
+  updateEmbedTemplate(id: number, template: Partial<InsertEmbedTemplate>): Promise<EmbedTemplate>;
+  deleteEmbedTemplate(id: number): Promise<boolean>;
+  // Command template mapping methods
+  getCommandTemplateMappings(): Promise<CommandTemplateMapping[]>;
+  getCommandTemplateMapping(commandName: string, context?: string): Promise<CommandTemplateMapping | undefined>;
+  createCommandTemplateMapping(mapping: InsertCommandTemplateMapping): Promise<CommandTemplateMapping>;
+  updateCommandTemplateMapping(id: number, mapping: Partial<InsertCommandTemplateMapping>): Promise<CommandTemplateMapping>;
+  deleteCommandTemplateMapping(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -657,6 +673,80 @@ export class DatabaseStorage implements IStorage {
       .delete(searchPresets)
       .where(and(eq(searchPresets.id, id), eq(searchPresets.userId, userId)))
       .returning({ id: searchPresets.id });
+    return result.length > 0;
+  }
+
+  // Embed template methods
+  async getEmbedTemplates(): Promise<EmbedTemplate[]> {
+    return await db.select().from(embedTemplates).orderBy(desc(embedTemplates.createdAt));
+  }
+
+  async getEmbedTemplate(id: number): Promise<EmbedTemplate | undefined> {
+    const result = await db.select().from(embedTemplates).where(eq(embedTemplates.id, id));
+    return result[0];
+  }
+
+  async getEmbedTemplateByName(name: string): Promise<EmbedTemplate | undefined> {
+    const result = await db.select().from(embedTemplates).where(eq(embedTemplates.name, name));
+    return result[0];
+  }
+
+  async createEmbedTemplate(template: InsertEmbedTemplate): Promise<EmbedTemplate> {
+    const [created] = await db.insert(embedTemplates).values(template).returning();
+    return created;
+  }
+
+  async updateEmbedTemplate(id: number, template: Partial<InsertEmbedTemplate>): Promise<EmbedTemplate> {
+    const [updated] = await db
+      .update(embedTemplates)
+      .set({ ...template, updatedAt: new Date() })
+      .where(eq(embedTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteEmbedTemplate(id: number): Promise<boolean> {
+    // Check if template is marked as default
+    const template = await this.getEmbedTemplate(id);
+    if (template?.isDefault) {
+      return false; // Cannot delete default templates
+    }
+    const result = await db.delete(embedTemplates).where(eq(embedTemplates.id, id)).returning({ id: embedTemplates.id });
+    return result.length > 0;
+  }
+
+  // Command template mapping methods
+  async getCommandTemplateMappings(): Promise<CommandTemplateMapping[]> {
+    return await db.select().from(commandTemplateMappings).orderBy(commandTemplateMappings.commandName);
+  }
+
+  async getCommandTemplateMapping(commandName: string, context?: string): Promise<CommandTemplateMapping | undefined> {
+    let query = db.select().from(commandTemplateMappings).where(eq(commandTemplateMappings.commandName, commandName));
+
+    if (context) {
+      query = query.where(eq(commandTemplateMappings.context, context)) as typeof query;
+    }
+
+    const result = await query;
+    return result[0];
+  }
+
+  async createCommandTemplateMapping(mapping: InsertCommandTemplateMapping): Promise<CommandTemplateMapping> {
+    const [created] = await db.insert(commandTemplateMappings).values(mapping).returning();
+    return created;
+  }
+
+  async updateCommandTemplateMapping(id: number, mapping: Partial<InsertCommandTemplateMapping>): Promise<CommandTemplateMapping> {
+    const [updated] = await db
+      .update(commandTemplateMappings)
+      .set({ ...mapping, updatedAt: new Date() })
+      .where(eq(commandTemplateMappings.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCommandTemplateMapping(id: number): Promise<boolean> {
+    const result = await db.delete(commandTemplateMappings).where(eq(commandTemplateMappings.id, id)).returning({ id: commandTemplateMappings.id });
     return result.length > 0;
   }
 }

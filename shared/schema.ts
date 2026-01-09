@@ -123,3 +123,35 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type SearchPreset = typeof searchPresets.$inferSelect;
 export type InsertSearchPreset = z.infer<typeof insertSearchPresetSchema>;
+
+// Embed templates for GUI embed builder
+export const embedTemplates = pgTable("embed_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  isDefault: boolean("is_default").default(false),
+  category: text("category"),
+  templateData: text("template_data").notNull(), // JSON stringified embed configuration
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Command to template mappings
+export const commandTemplateMappings = pgTable("command_template_mappings", {
+  id: serial("id").primaryKey(),
+  commandName: text("command_name").notNull().unique(),
+  templateId: serial("template_id").references(() => embedTemplates.id),
+  context: text("context"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEmbedTemplateSchema = createInsertSchema(embedTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCommandTemplateMappingSchema = createInsertSchema(commandTemplateMappings).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type EmbedTemplate = typeof embedTemplates.$inferSelect;
+export type InsertEmbedTemplate = z.infer<typeof insertEmbedTemplateSchema>;
+export type CommandTemplateMapping = typeof commandTemplateMappings.$inferSelect;
+export type InsertCommandTemplateMapping = z.infer<typeof insertCommandTemplateMappingSchema>;

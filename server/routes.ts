@@ -611,5 +611,274 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // EMBED TEMPLATE ROUTES (Admin only)
+  // ============================================
+
+  // Get all embed templates
+  app.get("/api/embed-templates", requireAdmin, async (req, res) => {
+    try {
+      const templates = await storage.getEmbedTemplates();
+      res.json(templates);
+    } catch (err) {
+      console.error("Error fetching embed templates:", err);
+      res.status(500).json({ message: "Failed to fetch embed templates" });
+    }
+  });
+
+  // Get single embed template by ID
+  app.get("/api/embed-templates/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid template ID" });
+      }
+
+      const template = await storage.getEmbedTemplate(id);
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+
+      res.json(template);
+    } catch (err) {
+      console.error("Error fetching embed template:", err);
+      res.status(500).json({ message: "Failed to fetch embed template" });
+    }
+  });
+
+  // Create embed template
+  app.post("/api/embed-templates", requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as Express.User;
+      const { name, description, category, templateData, isDefault } = req.body;
+
+      if (!name || !templateData) {
+        return res.status(400).json({ message: "Name and templateData are required" });
+      }
+
+      // Validate template_data is valid JSON
+      try {
+        if (typeof templateData === "string") {
+          JSON.parse(templateData);
+        }
+      } catch {
+        return res.status(400).json({ message: "templateData must be valid JSON" });
+      }
+
+      const template = await storage.createEmbedTemplate({
+        name,
+        description,
+        category,
+        templateData: typeof templateData === "string" ? templateData : JSON.stringify(templateData),
+        isDefault: isDefault || false,
+        createdBy: user.discordId,
+      });
+
+      res.status(201).json(template);
+    } catch (err) {
+      console.error("Error creating embed template:", err);
+      res.status(500).json({ message: "Failed to create embed template" });
+    }
+  });
+
+  // Update embed template
+  app.put("/api/embed-templates/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid template ID" });
+      }
+
+      const { name, description, category, templateData, isDefault } = req.body;
+
+      // Validate template_data if provided
+      if (templateData) {
+        try {
+          if (typeof templateData === "string") {
+            JSON.parse(templateData);
+          }
+        } catch {
+          return res.status(400).json({ message: "templateData must be valid JSON" });
+        }
+      }
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (category !== undefined) updateData.category = category;
+      if (templateData !== undefined) {
+        updateData.templateData = typeof templateData === "string" ? templateData : JSON.stringify(templateData);
+      }
+      if (isDefault !== undefined) updateData.isDefault = isDefault;
+
+      const template = await storage.updateEmbedTemplate(id, updateData);
+      res.json(template);
+    } catch (err) {
+      console.error("Error updating embed template:", err);
+      res.status(500).json({ message: "Failed to update embed template" });
+    }
+  });
+
+  // Delete embed template
+  app.delete("/api/embed-templates/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid template ID" });
+      }
+
+      const deleted = await storage.deleteEmbedTemplate(id);
+      if (!deleted) {
+        return res.status(403).json({ message: "Cannot delete default template" });
+      }
+
+      res.json({ message: "Template deleted successfully", id });
+    } catch (err) {
+      console.error("Error deleting embed template:", err);
+      res.status(500).json({ message: "Failed to delete embed template" });
+    }
+  });
+
+  // ============================================
+  // COMMAND TEMPLATE MAPPING ROUTES (Admin only)
+  // ============================================
+
+  // Get all command template mappings
+  app.get("/api/command-template-mappings", requireAdmin, async (req, res) => {
+    try {
+      const mappings = await storage.getCommandTemplateMappings();
+      res.json(mappings);
+    } catch (err) {
+      console.error("Error fetching command template mappings:", err);
+      res.status(500).json({ message: "Failed to fetch command template mappings" });
+    }
+  });
+
+  // Get command template mapping for bot (API key protected)
+  app.get("/api/bot/template/:commandName", requireBotApiKey, async (req, res) => {
+    try {
+      const { commandName } = req.params;
+      const context = req.query.context as string | undefined;
+
+      const mapping = await storage.getCommandTemplateMapping(commandName, context);
+      if (!mapping) {
+        return res.status(404).json({ message: "Mapping not found" });
+      }
+
+      // Also fetch the template data
+      const template = await storage.getEmbedTemplate(mapping.templateId);
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+
+      res.json({
+        mapping,
+        template_data: typeof template.templateData === "string" ? JSON.parse(template.templateData) : template.templateData,
+      });
+    } catch (err) {
+      console.error("Error fetching command template mapping:", err);
+      res.status(500).json({ message: "Failed to fetch command template mapping" });
+    }
+  });
+
+  // Create command template mapping
+  app.post("/api/command-template-mappings", requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as Express.User;
+      const { commandName, templateId, context } = req.body;
+
+      if (!commandName || !templateId) {
+        return res.status(400).json({ message: "commandName and templateId are required" });
+      }
+
+      const mapping = await storage.createCommandTemplateMapping({
+        commandName,
+        templateId,
+        context: context || "default",
+        createdBy: user.discordId,
+      });
+
+      res.status(201).json(mapping);
+    } catch (err) {
+      console.error("Error creating command template mapping:", err);
+      res.status(500).json({ message: "Failed to create command template mapping" });
+    }
+  });
+
+  // Update command template mapping
+  app.put("/api/command-template-mappings/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid mapping ID" });
+      }
+
+      const { commandName, templateId, context } = req.body;
+
+      const updateData: any = {};
+      if (commandName !== undefined) updateData.commandName = commandName;
+      if (templateId !== undefined) updateData.templateId = templateId;
+      if (context !== undefined) updateData.context = context;
+
+      const mapping = await storage.updateCommandTemplateMapping(id, updateData);
+      res.json(mapping);
+    } catch (err) {
+      console.error("Error updating command template mapping:", err);
+      res.status(500).json({ message: "Failed to update command template mapping" });
+    }
+  });
+
+  // Delete command template mapping
+  app.delete("/api/command-template-mappings/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid mapping ID" });
+      }
+
+      const deleted = await storage.deleteCommandTemplateMapping(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Mapping not found" });
+      }
+
+      res.json({ message: "Mapping deleted successfully", id });
+    } catch (err) {
+      console.error("Error deleting command template mapping:", err);
+      res.status(500).json({ message: "Failed to delete command template mapping" });
+    }
+  });
+
+  // ============================================
+  // EMBED VARIABLES REFERENCE (Admin only)
+  // ============================================
+
+  // Get available embed variables
+  app.get("/api/embed-variables", requireAdmin, async (req, res) => {
+    try {
+      const variables = {
+        user: [
+          { name: "user.name", description: "User's display name", example: "JohnDoe" },
+          { name: "user.mention", description: "Mentionable user tag", example: "@JohnDoe" },
+          { name: "user.id", description: "User's Discord ID", example: "123456789" },
+          { name: "user.display_avatar.url", description: "URL to user's avatar", example: "https://cdn.discordapp.com/..." }
+        ],
+        leveling: [
+          { name: "level", description: "User's current level", example: "5" },
+          { name: "xp", description: "User's current XP", example: "350" },
+          { name: "xp_needed", description: "XP needed for next level", example: "150" }
+        ],
+        timestamp: [
+          { name: "timestamp", description: "Current date and time", example: "2024-01-09 14:30:00" },
+          { name: "date", description: "Current date", example: "2024-01-09" },
+          { name: "time", description: "Current time", example: "14:30:00" }
+        ]
+      };
+      res.json(variables);
+    } catch (err) {
+      console.error("Error fetching embed variables:", err);
+      res.status(500).json({ message: "Failed to fetch embed variables" });
+    }
+  });
+
   return httpServer;
 }

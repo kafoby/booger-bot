@@ -7,6 +7,8 @@ from config.constants import LEVEL_UP_CHANNEL_ID, LEVEL_FILE
 from config.settings import config
 from utils.logging import BotLogger
 from utils.embed_builder import EmbedBuilder
+from utils.template_cache import template_cache
+from utils.variable_context import VariableContext
 
 class Levels(commands.Cog):
     """Handles XP tracking, leveling, and leaderboards"""
@@ -71,12 +73,26 @@ class Levels(commands.Cog):
             channel = self.bot.get_channel(LEVEL_UP_CHANNEL_ID)
             if channel:
                 try:
-                    embed = EmbedBuilder.create_embed(
-                        title="Level Up!",
-                        color=0x9b59b6
-                    )
-                    embed.description = f"{message.author.mention} reached **Level {levels[user_id]['level']}**"
-                    embed.set_thumbnail(url=message.author.display_avatar.url)
+                    # Try to get template from API
+                    template_data = await template_cache.get_template("levels.level_up", "notification")
+
+                    if template_data and "template_data" in template_data:
+                        # Use template system
+                        variables = VariableContext.from_level_data(
+                            user=message.author,
+                            level=levels[user_id]['level'],
+                            xp=levels[user_id]['xp'],
+                            xp_needed=self._get_xp_for_level(levels[user_id]['level'])
+                        )
+                        embed = EmbedBuilder.create_from_template(template_data['template_data'], variables)
+                    else:
+                        # Fallback to original style
+                        embed = EmbedBuilder.create_embed(
+                            title="Level Up!",
+                            color=0x9b59b6
+                        )
+                        embed.description = f"{message.author.mention} reached **Level {levels[user_id]['level']}**"
+                        embed.set_thumbnail(url=message.author.display_avatar.url)
 
                     await channel.send(embed=embed)
                     await BotLogger.log(
@@ -109,14 +125,28 @@ class Levels(commands.Cog):
         next_level_xp = self._get_xp_for_level(level)
         xp_needed = next_level_xp - xp
 
-        embed = EmbedBuilder.create_embed(
-            title=f"{member.name}'s Rank",
-            color=0x9b59b6
-        )
-        embed.set_thumbnail(url=member.display_avatar.url)
-        embed.add_field(name="Level", value=str(level), inline=True)
-        embed.add_field(name="Current XP", value=str(xp), inline=True)
-        embed.add_field(name="XP to Next Level", value=str(xp_needed), inline=True)
+        # Try to get template from API
+        template_data = await template_cache.get_template("levels.rank", "default")
+
+        if template_data and "template_data" in template_data:
+            # Use template system
+            variables = VariableContext.from_level_data(
+                user=member,
+                level=level,
+                xp=xp,
+                xp_needed=xp_needed
+            )
+            embed = EmbedBuilder.create_from_template(template_data['template_data'], variables)
+        else:
+            # Fallback to original style
+            embed = EmbedBuilder.create_embed(
+                title=f"{member.name}'s Rank",
+                color=0x9b59b6
+            )
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.add_field(name="Level", value=str(level), inline=True)
+            embed.add_field(name="Current XP", value=str(xp), inline=True)
+            embed.add_field(name="XP to Next Level", value=str(xp_needed), inline=True)
 
         await ctx.send(embed=embed)
         await BotLogger.log(f"{ctx.author} checked rank for {member.name}", "info", "command")
@@ -144,14 +174,28 @@ class Levels(commands.Cog):
         next_level_xp = self._get_xp_for_level(level)
         xp_needed = next_level_xp - xp
 
-        embed = EmbedBuilder.create_embed(
-            title=f"{member.name}'s Rank",
-            color=0x9b59b6
-        )
-        embed.set_thumbnail(url=member.display_avatar.url)
-        embed.add_field(name="Level", value=str(level), inline=True)
-        embed.add_field(name="Current XP", value=str(xp), inline=True)
-        embed.add_field(name="XP to Next Level", value=str(xp_needed), inline=True)
+        # Try to get template from API
+        template_data = await template_cache.get_template("levels.rank", "default")
+
+        if template_data and "template_data" in template_data:
+            # Use template system
+            variables = VariableContext.from_level_data(
+                user=member,
+                level=level,
+                xp=xp,
+                xp_needed=xp_needed
+            )
+            embed = EmbedBuilder.create_from_template(template_data['template_data'], variables)
+        else:
+            # Fallback to original style
+            embed = EmbedBuilder.create_embed(
+                title=f"{member.name}'s Rank",
+                color=0x9b59b6
+            )
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.add_field(name="Level", value=str(level), inline=True)
+            embed.add_field(name="Current XP", value=str(xp), inline=True)
+            embed.add_field(name="XP to Next Level", value=str(xp_needed), inline=True)
 
         await interaction.followup.send(embed=embed)
         await BotLogger.log(f"{interaction.user} checked rank for {member.name}", "info", "command")
@@ -175,11 +219,20 @@ class Levels(commands.Cog):
             reverse=True
         )[:10]
 
-        embed = EmbedBuilder.create_embed(
-            title="Leaderboard - Top 10",
-            color=0x9b59b6
-        )
+        # Try to get template from API
+        template_data = await template_cache.get_template("levels.leaderboard", "default")
 
+        if template_data and "template_data" in template_data:
+            # Use template system for base structure
+            embed = EmbedBuilder.create_from_template(template_data['template_data'], {})
+        else:
+            # Fallback to original style
+            embed = EmbedBuilder.create_embed(
+                title="Leaderboard - Top 10",
+                color=0x9b59b6
+            )
+
+        # Add dynamic fields (always done regardless of template)
         for i, (user_id, data) in enumerate(sorted_users, 1):
             user = self.bot.get_user(int(user_id))
             name = user.name if user else "Unknown User"
@@ -213,11 +266,20 @@ class Levels(commands.Cog):
             reverse=True
         )[:10]
 
-        embed = EmbedBuilder.create_embed(
-            title="Leaderboard - Top 10",
-            color=0x9b59b6
-        )
+        # Try to get template from API
+        template_data = await template_cache.get_template("levels.leaderboard", "default")
 
+        if template_data and "template_data" in template_data:
+            # Use template system for base structure
+            embed = EmbedBuilder.create_from_template(template_data['template_data'], {})
+        else:
+            # Fallback to original style
+            embed = EmbedBuilder.create_embed(
+                title="Leaderboard - Top 10",
+                color=0x9b59b6
+            )
+
+        # Add dynamic fields (always done regardless of template)
         for i, (user_id, data) in enumerate(sorted_users, 1):
             user = self.bot.get_user(int(user_id))
             name = user.name if user else "Unknown User"
