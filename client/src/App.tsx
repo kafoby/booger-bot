@@ -10,6 +10,7 @@ import Login from "@/pages/Login";
 import Config from "@/pages/Config";
 import Performance from "@/pages/Performance";
 import Users from "@/pages/Users";
+import EmbedBuilder from "@/pages/EmbedBuilder";
 import NotFound from "@/pages/not-found";
 
 // Removed FloatingParticles - too AI-generic and mechanical
@@ -69,6 +70,9 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/config">
         <ProtectedRoute component={Config} />
+      </Route>
+      <Route path="/embed-builder">
+        <ProtectedRoute component={EmbedBuilder} />
       </Route>
       <Route path="/performance">
         <ProtectedRoute component={Performance} />

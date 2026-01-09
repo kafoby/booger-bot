@@ -1,4 +1,4 @@
-import { LogOut, Shield, Settings, ChevronDown, BarChart3, Users, Activity } from "lucide-react";
+import { LogOut, Shield, Settings, ChevronDown, BarChart3, Users, Activity, LayoutTemplate } from "lucide-react";
 import { useAuth, getDiscordAvatarUrl } from "@/lib/auth";
 import { useBotStatus } from "@/hooks/use-bot-status";
 import { Button } from "@/components/ui/button";
@@ -173,6 +173,12 @@ export function Header() {
                     <DropdownMenuItem className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-white/70 hover:text-white/90">
                       <Users className="mr-2 h-4 w-4" />
                       <span>User Activity</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/embed-builder">
+                    <DropdownMenuItem className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-white/70 hover:text-white/90">
+                      <LayoutTemplate className="mr-2 h-4 w-4" />
+                      <span>Embed Builder</span>
                     </DropdownMenuItem>
                   </Link>
                   <DropdownMenuSeparator className="bg-white/10" />
