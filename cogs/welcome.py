@@ -52,14 +52,12 @@ class Welcome(commands.Cog):
             img = Image.new("RGB", (W, H))
             draw = ImageDraw.Draw(img)
             
-            # Draw gradient background (Dark blue/slate to darker slate)
+            # Draw gradient background (Dark purple/slate theme)
             for y in range(H):
-                # Interpolate between two colors: (30, 30, 46) and (45, 45, 65)
-                # Or a nicer gradient: #1a1c2c to #4a4e69
-                r = int(26 + (74 - 26) * y / H)
-                g = int(28 + (78 - 28) * y / H)
-                b = int(44 + (105 - 44) * y / H)
-                # Drawing lines is faster than per-pixel
+                # Interpolate between a deep dark purple and a slightly lighter violet-slate
+                r = int(25 + (45 - 25) * y / H)
+                g = int(20 + (30 - 20) * y / H)
+                b = int(45 + (85 - 45) * y / H)
                 draw.line([(0, y), (W, y)], fill=(r, g, b))
 
             # Process avatar - make it circular with border
@@ -117,14 +115,15 @@ class Welcome(commands.Cog):
             _, name_h = get_text_size(name_font, name_text)
             _, count_h = get_text_size(text_font, count_text)
             
-            total_text_height = name_h + count_h + 10 # 10px spacing
+            TEXT_SPACING = 25
+            total_text_height = name_h + count_h + TEXT_SPACING
             start_y = (H - total_text_height) // 2
 
             # Draw member name
             draw.text((text_x, start_y), name_text, font=name_font, fill=(255, 255, 255))
 
-            # Draw member count
-            draw.text((text_x, start_y + name_h + 10), count_text, font=text_font, fill=(100, 220, 255))
+            # Draw member count (lilac color)
+            draw.text((text_x, start_y + name_h + TEXT_SPACING), count_text, font=text_font, fill=(180, 160, 255))
 
             # Save to buffer
             buffer = io.BytesIO()
