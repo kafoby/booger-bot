@@ -88,26 +88,14 @@ class Welcome(commands.Cog):
             img.paste(final_avatar, (AVATAR_PADDING, (H - final_avatar.height) // 2), final_avatar)
 
             # Load fonts
-            def load_font(name, size):
-                try:
-                    return ImageFont.truetype(name, size)
-                except IOError:
-                    return None
-
-            # Try common fonts
-            name_font = (
-                load_font("DejaVuSans-Bold.ttf", 55) or 
-                load_font("arialbd.ttf", 55) or 
-                load_font("LiberationSans-Bold.ttf", 55) or
-                ImageFont.load_default()
-            )
-            
-            text_font = (
-                load_font("DejaVuSans.ttf", 35) or 
-                load_font("arial.ttf", 35) or 
-                load_font("LiberationSans-Regular.ttf", 35) or
-                ImageFont.load_default()
-            )
+            try:
+                name_font = ImageFont.truetype("fonts/Roboto-Bold.ttf", 55)
+                text_font = ImageFont.truetype("fonts/Roboto-Regular.ttf", 35)
+            except Exception as e:
+                # Log warning if fonts are missing, though they should be there now
+                print(f"Warning: Could not load local fonts: {e}") 
+                name_font = ImageFont.load_default()
+                text_font = ImageFont.load_default()
 
             # Text content
             name_text = member.name
