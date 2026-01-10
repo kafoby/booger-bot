@@ -43,37 +43,100 @@ class Welcome(commands.Cog):
                         return None
                     avatar_data = await resp.read()
 
-            # Process avatar - make it circular
-            avatar = Image.open(io.BytesIO(avatar_data)).convert("RGBA").resize((128, 128))
-            mask = Image.new("L", (128, 128), 0)
-            draw_mask = ImageDraw.Draw(mask)
-            draw_mask.ellipse((0, 0, 128, 128), fill=255)
-            avatar = Image.composite(avatar, Image.new("RGBA", (128, 128), (0, 0, 0, 0)), mask)
-
-            # Create base image
-            width, height = 600, 200
-            img = Image.new("RGB", (width, height), (30, 30, 46))
+            # Constants
+            W, H = 800, 250
+            AVATAR_SIZE = 160
+            AVATAR_PADDING = 45
+            
+            # Create base image with gradient
+            img = Image.new("RGB", (W, H))
             draw = ImageDraw.Draw(img)
+            
+            # Draw gradient background (Dark blue/slate to darker slate)
+            for y in range(H):
+                # Interpolate between two colors: (30, 30, 46) and (45, 45, 65)
+                # Or a nicer gradient: #1a1c2c to #4a4e69
+                r = int(26 + (74 - 26) * y / H)
+                g = int(28 + (78 - 28) * y / H)
+                b = int(44 + (105 - 44) * y / H)
+                # Drawing lines is faster than per-pixel
+                draw.line([(0, y), (W, y)], fill=(r, g, b))
 
-            # Paste circular avatar
-            img.paste(avatar, (40, height // 2 - 64), avatar)
+            # Process avatar - make it circular with border
+            avatar = Image.open(io.BytesIO(avatar_data)).convert("RGBA").resize((AVATAR_SIZE, AVATAR_SIZE))
+            
+            # Create mask for circular crop
+            mask = Image.new("L", (AVATAR_SIZE, AVATAR_SIZE), 0)
+            draw_mask = ImageDraw.Draw(mask)
+            draw_mask.ellipse((0, 0, AVATAR_SIZE, AVATAR_SIZE), fill=255)
+            
+            # Create a circular border
+            border_size = 4
+            border_img = Image.new("RGBA", (AVATAR_SIZE + border_size*2, AVATAR_SIZE + border_size*2), (0, 0, 0, 0))
+            draw_border = ImageDraw.Draw(border_img)
+            draw_border.ellipse((0, 0, AVATAR_SIZE + border_size*2 - 1, AVATAR_SIZE + border_size*2 - 1), fill=(255, 255, 255, 255))
+            
+            # Composite avatar onto transparent background
+            avatar_comp = Image.new("RGBA", (AVATAR_SIZE, AVATAR_SIZE), (0, 0, 0, 0))
+            avatar_comp.paste(avatar, (0, 0), mask)
+            
+            # Paste avatar onto border
+            final_avatar = border_img.copy()
+            final_avatar.paste(avatar_comp, (border_size, border_size), avatar_comp)
+
+            # Paste avatar onto main image
+            img.paste(final_avatar, (AVATAR_PADDING, (H - final_avatar.height) // 2), final_avatar)
 
             # Load fonts
-            try:
-                name_font = ImageFont.truetype("arialbd.ttf", 40)
-                text_font = ImageFont.truetype("arial.ttf", 28)
-            except Exception:
-                # Fallback to default font if Arial not available
-                name_font = ImageFont.load_default()
-                text_font = ImageFont.load_default()
+            def load_font(name, size):
+                try:
+                    return ImageFont.truetype(name, size)
+                except IOError:
+                    return None
+
+            # Try common fonts
+            name_font = (
+                load_font("DejaVuSans-Bold.ttf", 55) or 
+                load_font("arialbd.ttf", 55) or 
+                load_font("LiberationSans-Bold.ttf", 55) or
+                ImageFont.load_default()
+            )
+            
+            text_font = (
+                load_font("DejaVuSans.ttf", 35) or 
+                load_font("arial.ttf", 35) or 
+                load_font("LiberationSans-Regular.ttf", 35) or
+                ImageFont.load_default()
+            )
+
+            # Text content
+            name_text = member.name
+            ordinal = self._get_ordinal_suffix(member_count)
+            count_text = f"You are the {ordinal} member!"
+
+            # Text positioning
+            text_x = AVATAR_PADDING + final_avatar.width + 40
+            
+            # Calculate text height for vertical centering
+            # Using getbbox if available (Pillow >= 9.2.0), fallback to getsize
+            def get_text_size(font, text):
+                if hasattr(font, 'getbbox'):
+                    bbox = font.getbbox(text)
+                    return bbox[2] - bbox[0], bbox[3] - bbox[1]
+                else:
+                    return font.getsize(text)
+
+            _, name_h = get_text_size(name_font, name_text)
+            _, count_h = get_text_size(text_font, count_text)
+            
+            total_text_height = name_h + count_h + 10 # 10px spacing
+            start_y = (H - total_text_height) // 2
 
             # Draw member name
-            draw.text((180, 50), member.name, font=name_font, fill=(255, 255, 255))
+            draw.text((text_x, start_y), name_text, font=name_font, fill=(255, 255, 255))
 
-            # Draw member count with ordinal suffix
-            member_text = f"{self._get_ordinal_suffix(member_count)} member to join"
-            wrapped = textwrap.fill(member_text, width=30)
-            draw.text((180, 100), wrapped, font=text_font, fill=(200, 200, 255))
+            # Draw member count
+            draw.text((text_x, start_y + name_h + 10), count_text, font=text_font, fill=(100, 220, 255))
 
             # Save to buffer
             buffer = io.BytesIO()
