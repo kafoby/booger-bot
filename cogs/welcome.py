@@ -143,5 +143,51 @@ class Welcome(commands.Cog):
             except Exception:
                 pass
 
+    @commands.command(name="testwelcome")
+    @commands.has_permissions(administrator=True)
+    async def test_welcome(self, ctx, member: discord.Member = None):
+        """Test the welcome message functionality
+
+        Usage:
+            !testwelcome - Test with yourself
+            !testwelcome @member - Test with a specific member
+        """
+        target_member = member or ctx.author
+
+        # Get the welcome channel
+        channel = self.bot.get_channel(WELCOME_CHANNEL_ID)
+        if not channel:
+            await ctx.send(f"⚠️ Welcome channel {WELCOME_CHANNEL_ID} not found!")
+            return
+
+        try:
+            member_count = ctx.guild.member_count
+
+            # Try to create welcome image
+            image_buffer = await self._create_welcome_image(target_member, member_count)
+
+            if image_buffer:
+                # Send image welcome
+                await channel.send(
+                    f"**[TEST]** Testing welcome message for {target_member.mention}",
+                    file=discord.File(image_buffer, filename="welcome.png")
+                )
+                await ctx.send(f"✅ Test welcome message sent to <#{WELCOME_CHANNEL_ID}> for {target_member.mention}")
+            else:
+                # Fallback to text-only welcome
+                ordinal_count = self._get_ordinal_suffix(member_count)
+                await channel.send(
+                    f"**[TEST]** Welcome {target_member.mention}! You are the **{ordinal_count}** member to join!"
+                )
+                await ctx.send(f"✅ Test welcome message (text fallback) sent to <#{WELCOME_CHANNEL_ID}> for {target_member.mention}")
+
+        except Exception as e:
+            await ctx.send(f"❌ Error testing welcome: {str(e)}")
+            await BotLogger.log_error(
+                f"Error in test_welcome command for {target_member.name}",
+                e,
+                "system"
+            )
+
 async def setup(bot):
     await bot.add_cog(Welcome(bot))
