@@ -71,7 +71,12 @@ class Starboard(commands.Cog):
 
         # Check if reaction is in monitored channel
         monitored_channel_id = starboard_config.get("monitored_channel_id")
-        if not monitored_channel_id or payload.channel_id != monitored_channel_id:
+        try:
+            monitored_channel_id = int(monitored_channel_id)
+        except (ValueError, TypeError):
+            return
+
+        if payload.channel_id != monitored_channel_id:
             return
 
         # Check if reaction is the configured emoji
@@ -103,14 +108,23 @@ class Starboard(commands.Cog):
             return
 
         # Get the reaction and check if threshold is met
-        threshold = starboard_config.get("threshold", 5)
+        try:
+            threshold = int(starboard_config.get("threshold", 5))
+        except (ValueError, TypeError):
+            threshold = 5
+            
         reaction = discord.utils.get(message.reactions, emoji=configured_emoji)
+        
+        # If the bot itself added the reaction (via autoreact), it counts towards the total.
+        # discord.py's reaction.count includes the bot's reaction.
         if not reaction or reaction.count < threshold:
             return
 
         # Get starboard channel
         starboard_channel_id = starboard_config.get("starboard_channel_id")
-        if not starboard_channel_id:
+        try:
+            starboard_channel_id = int(starboard_channel_id)
+        except (ValueError, TypeError):
             return
 
         starboard_channel = guild.get_channel(starboard_channel_id)
