@@ -394,17 +394,17 @@ export async function registerRoutes(
       const starboard: Record<string, any> = {};
       for (const sc of starboardConfigs) {
         starboard[sc.guildId] = {
-          monitored_channel_id: parseInt(sc.monitoredChannelId),
+          monitored_channel_id: sc.monitoredChannelId,
           emoji: sc.emoji,
           threshold: sc.threshold,
-          starboard_channel_id: parseInt(sc.starboardChannelId),
+          starboard_channel_id: sc.starboardChannelId,
         };
       }
 
       const autoreact: Record<string, any> = {};
       for (const ac of autoreactConfigs) {
         autoreact[ac.guildId] = {
-          channel_id: parseInt(ac.channelId),
+          channel_id: ac.channelId,
           type: ac.type,
           emojis: ac.emojis,
         };
