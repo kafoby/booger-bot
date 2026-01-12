@@ -29,11 +29,16 @@ class AutoReact(commands.Cog):
 
         # Check if autoreact is configured for this guild
         if not autoreact_config:
+            # print(f"No autoreact config for guild {guild_id}")
             return
 
         # Check if message is in the configured channel
-        channel_id = autoreact_config.get("channel_id")
-        if not channel_id or message.channel.id != channel_id:
+        try:
+            config_channel_id = int(autoreact_config.get("channel_id", 0))
+        except (ValueError, TypeError):
+            return
+
+        if not config_channel_id or message.channel.id != config_channel_id:
             return
 
         # Determine if we should react based on the type
