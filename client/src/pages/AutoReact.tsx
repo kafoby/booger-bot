@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   useAutoreactConfig,
-  useCreateAutoreactConfig,
-  useUpdateAutoreactConfig,
+  useSaveAutoreactConfig,
   useDeleteAutoreactConfig,
 } from "@/hooks/use-autoreact";
 import { useToast } from "@/hooks/use-toast";
@@ -16,30 +15,24 @@ import { Smile, Trash2, Save, Loader2, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function AutoReact() {
-  const [guildId, setGuildId] = useState("");
   const [channelId, setChannelId] = useState("");
   const [type, setType] = useState<"all" | "embed" | "file">("all");
   const [emojis, setEmojis] = useState<string[]>(["😎"]);
   const [newEmoji, setNewEmoji] = useState("");
 
-  const { data: config, isLoading } = useAutoreactConfig(guildId || null);
-  const createConfig = useCreateAutoreactConfig();
-  const updateConfig = useUpdateAutoreactConfig();
+  const { data: config, isLoading } = useAutoreactConfig();
+  const saveConfig = useSaveAutoreactConfig();
   const deleteConfig = useDeleteAutoreactConfig();
   const { toast } = useToast();
 
   // Load existing config when found
-  if (config && guildId) {
-    if (channelId !== config.channelId) {
+  useEffect(() => {
+    if (config) {
       setChannelId(config.channelId);
-    }
-    if (type !== config.type) {
       setType(config.type);
-    }
-    if (JSON.stringify(emojis) !== JSON.stringify(config.emojis)) {
       setEmojis(config.emojis);
     }
-  }
+  }, [config]);
 
   const handleAddEmoji = () => {
     if (!newEmoji.trim()) {
@@ -62,41 +55,25 @@ export default function AutoReact() {
   };
 
   const handleSave = async () => {
-    if (!guildId || !channelId || emojis.length === 0) {
+    if (!channelId || emojis.length === 0) {
       toast({
         title: "Validation Error",
-        description: "Guild ID, Channel ID, and at least one emoji are required",
+        description: "Channel ID and at least one emoji are required",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      if (config) {
-        // Update existing
-        await updateConfig.mutateAsync({
-          guildId,
-          channelId,
-          type,
-          emojis,
-        });
-        toast({
-          title: "Success",
-          description: "AutoReact configuration updated successfully",
-        });
-      } else {
-        // Create new
-        await createConfig.mutateAsync({
-          guildId,
-          channelId,
-          type,
-          emojis,
-        });
-        toast({
-          title: "Success",
-          description: "AutoReact configuration created successfully",
-        });
-      }
+      await saveConfig.mutateAsync({
+        channelId,
+        type,
+        emojis,
+      });
+      toast({
+        title: "Success",
+        description: "AutoReact configuration saved successfully",
+      });
     } catch (error) {
       toast({
         title: "Error",
@@ -107,14 +84,12 @@ export default function AutoReact() {
   };
 
   const handleDelete = async () => {
-    if (!guildId) return;
-
     if (!confirm("Are you sure you want to delete this autoreact configuration?")) {
       return;
     }
 
     try {
-      await deleteConfig.mutateAsync(guildId);
+      await deleteConfig.mutateAsync();
       toast({
         title: "Success",
         description: "AutoReact configuration deleted successfully",
@@ -154,21 +129,6 @@ export default function AutoReact() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Guild ID */}
-            <div className="space-y-2">
-              <Label htmlFor="guildId">Server (Guild) ID *</Label>
-              <Input
-                id="guildId"
-                placeholder="123456789012345678"
-                value={guildId}
-                onChange={(e) => setGuildId(e.target.value)}
-                disabled={isLoading}
-              />
-              <p className="text-sm text-muted-foreground">
-                Discord server ID (enable Developer Mode → right-click server → Copy ID)
-              </p>
-            </div>
-
             {/* Channel ID */}
             <div className="space-y-2">
               <Label htmlFor="channelId">Channel ID *</Label>
@@ -258,9 +218,9 @@ export default function AutoReact() {
             <div className="flex gap-2">
               <Button
                 onClick={handleSave}
-                disabled={isLoading || createConfig.isPending || updateConfig.isPending}
+                disabled={isLoading || saveConfig.isPending}
               >
-                {createConfig.isPending || updateConfig.isPending ? (
+                {saveConfig.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving...
@@ -268,7 +228,7 @@ export default function AutoReact() {
                 ) : (
                   <>
                     <Save className="mr-2 h-4 w-4" />
-                    {config ? "Update Configuration" : "Create Configuration"}
+                    Save Configuration
                   </>
                 )}
               </Button>
@@ -293,14 +253,6 @@ export default function AutoReact() {
                 </Button>
               )}
             </div>
-
-            {config && (
-              <div className="pt-4 border-t">
-                <p className="text-sm text-muted-foreground">
-                  Configuration exists for this server. Update or delete it above.
-                </p>
-              </div>
-            )}
           </CardContent>
         </Card>
 

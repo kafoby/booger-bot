@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,44 +6,35 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   useStarboardConfig,
-  useCreateStarboardConfig,
-  useUpdateStarboardConfig,
+  useSaveStarboardConfig,
   useDeleteStarboardConfig,
 } from "@/hooks/use-starboard";
 import { useToast } from "@/hooks/use-toast";
 import { Star, Trash2, Save, Loader2 } from "lucide-react";
 
 export default function Starboard() {
-  const [guildId, setGuildId] = useState("");
   const [monitoredChannelId, setMonitoredChannelId] = useState("");
   const [emoji, setEmoji] = useState("⭐");
   const [threshold, setThreshold] = useState(5);
   const [starboardChannelId, setStarboardChannelId] = useState("");
 
-  const { data: config, isLoading } = useStarboardConfig(guildId || null);
-  const createConfig = useCreateStarboardConfig();
-  const updateConfig = useUpdateStarboardConfig();
+  const { data: config, isLoading } = useStarboardConfig();
+  const saveConfig = useSaveStarboardConfig();
   const deleteConfig = useDeleteStarboardConfig();
   const { toast } = useToast();
 
   // Load existing config when found
-  if (config && guildId) {
-    if (monitoredChannelId !== config.monitoredChannelId) {
+  useEffect(() => {
+    if (config) {
       setMonitoredChannelId(config.monitoredChannelId);
-    }
-    if (emoji !== config.emoji) {
       setEmoji(config.emoji);
-    }
-    if (threshold !== config.threshold) {
       setThreshold(config.threshold);
-    }
-    if (starboardChannelId !== config.starboardChannelId) {
       setStarboardChannelId(config.starboardChannelId);
     }
-  }
+  }, [config]);
 
   const handleSave = async () => {
-    if (!guildId || !monitoredChannelId || !emoji || !starboardChannelId) {
+    if (!monitoredChannelId || !emoji || !starboardChannelId) {
       toast({
         title: "Validation Error",
         description: "All fields are required",
@@ -62,33 +53,16 @@ export default function Starboard() {
     }
 
     try {
-      if (config) {
-        // Update existing
-        await updateConfig.mutateAsync({
-          guildId,
-          monitoredChannelId,
-          emoji,
-          threshold,
-          starboardChannelId,
-        });
-        toast({
-          title: "Success",
-          description: "Starboard configuration updated successfully",
-        });
-      } else {
-        // Create new
-        await createConfig.mutateAsync({
-          guildId,
-          monitoredChannelId,
-          emoji,
-          threshold,
-          starboardChannelId,
-        });
-        toast({
-          title: "Success",
-          description: "Starboard configuration created successfully",
-        });
-      }
+      await saveConfig.mutateAsync({
+        monitoredChannelId,
+        emoji,
+        threshold,
+        starboardChannelId,
+      });
+      toast({
+        title: "Success",
+        description: "Starboard configuration saved successfully",
+      });
     } catch (error) {
       toast({
         title: "Error",
@@ -99,14 +73,12 @@ export default function Starboard() {
   };
 
   const handleDelete = async () => {
-    if (!guildId) return;
-
     if (!confirm("Are you sure you want to delete this starboard configuration?")) {
       return;
     }
 
     try {
-      await deleteConfig.mutateAsync(guildId);
+      await deleteConfig.mutateAsync();
       toast({
         title: "Success",
         description: "Starboard configuration deleted successfully",
@@ -147,21 +119,6 @@ export default function Starboard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Guild ID */}
-            <div className="space-y-2">
-              <Label htmlFor="guildId">Server (Guild) ID *</Label>
-              <Input
-                id="guildId"
-                placeholder="123456789012345678"
-                value={guildId}
-                onChange={(e) => setGuildId(e.target.value)}
-                disabled={isLoading}
-              />
-              <p className="text-sm text-muted-foreground">
-                Discord server ID (enable Developer Mode → right-click server → Copy ID)
-              </p>
-            </div>
-
             {/* Monitored Channel ID */}
             <div className="space-y-2">
               <Label htmlFor="monitoredChannelId">Monitored Channel ID *</Label>
@@ -228,9 +185,9 @@ export default function Starboard() {
             <div className="flex gap-2">
               <Button
                 onClick={handleSave}
-                disabled={isLoading || createConfig.isPending || updateConfig.isPending}
+                disabled={isLoading || saveConfig.isPending}
               >
-                {createConfig.isPending || updateConfig.isPending ? (
+                {saveConfig.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving...
@@ -238,7 +195,7 @@ export default function Starboard() {
                 ) : (
                   <>
                     <Save className="mr-2 h-4 w-4" />
-                    {config ? "Update Configuration" : "Create Configuration"}
+                    Save Configuration
                   </>
                 )}
               </Button>
@@ -263,14 +220,6 @@ export default function Starboard() {
                 </Button>
               )}
             </div>
-
-            {config && (
-              <div className="pt-4 border-t">
-                <p className="text-sm text-muted-foreground">
-                  Configuration exists for this server. Update or delete it above.
-                </p>
-              </div>
-            )}
           </CardContent>
         </Card>
 

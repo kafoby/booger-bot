@@ -881,21 +881,15 @@ export async function registerRoutes(
   // STARBOARD CONFIGURATION ROUTES (Admin only)
   // ============================================
 
-  // Get all starboard configurations
+  const GUILD_ID = process.env.DISCORD_GUILD_ID;
+
+  // Get starboard config for the configured guild
   app.get("/api/starboard", requireAdmin, async (req, res) => {
     try {
-      const configs = await storage.getStarboardConfigs();
-      res.json(configs);
-    } catch (err) {
-      console.error("Error fetching starboard configs:", err);
-      res.status(500).json({ message: "Failed to fetch starboard configurations" });
-    }
-  });
-
-  // Get starboard config for specific guild
-  app.get("/api/starboard/:guildId", requireAdmin, async (req, res) => {
-    try {
-      const config = await storage.getStarboardConfig(req.params.guildId);
+      if (!GUILD_ID) {
+        return res.status(500).json({ message: "Guild ID not configured" });
+      }
+      const config = await storage.getStarboardConfig(GUILD_ID);
       if (!config) {
         return res.status(404).json({ message: "Starboard configuration not found" });
       }
@@ -906,53 +900,55 @@ export async function registerRoutes(
     }
   });
 
-  // Create starboard configuration
+  // Create or update starboard configuration
   app.post("/api/starboard", requireAdmin, async (req, res) => {
     try {
-      const user = req.user as Express.User;
-      const { guildId, monitoredChannelId, emoji, threshold, starboardChannelId } = req.body;
+      if (!GUILD_ID) {
+        return res.status(500).json({ message: "Guild ID not configured" });
+      }
 
-      const config = await storage.createStarboardConfig({
-        guildId,
-        monitoredChannelId,
-        emoji,
-        threshold,
-        starboardChannelId,
-        createdBy: user.discordId,
-      });
-
-      res.json(config);
-    } catch (err) {
-      console.error("Error creating starboard config:", err);
-      res.status(500).json({ message: "Failed to create starboard configuration" });
-    }
-  });
-
-  // Update starboard configuration
-  app.put("/api/starboard/:guildId", requireAdmin, async (req, res) => {
-    try {
       const user = req.user as Express.User;
       const { monitoredChannelId, emoji, threshold, starboardChannelId } = req.body;
 
-      const config = await storage.updateStarboardConfig(req.params.guildId, {
-        monitoredChannelId,
-        emoji,
-        threshold,
-        starboardChannelId,
-        createdBy: user.discordId,
-      });
+      // Check if config already exists
+      const existing = await storage.getStarboardConfig(GUILD_ID);
+
+      let config;
+      if (existing) {
+        // Update existing
+        config = await storage.updateStarboardConfig(GUILD_ID, {
+          monitoredChannelId,
+          emoji,
+          threshold,
+          starboardChannelId,
+          createdBy: user.discordId,
+        });
+      } else {
+        // Create new
+        config = await storage.createStarboardConfig({
+          guildId: GUILD_ID,
+          monitoredChannelId,
+          emoji,
+          threshold,
+          starboardChannelId,
+          createdBy: user.discordId,
+        });
+      }
 
       res.json(config);
     } catch (err) {
-      console.error("Error updating starboard config:", err);
-      res.status(500).json({ message: "Failed to update starboard configuration" });
+      console.error("Error saving starboard config:", err);
+      res.status(500).json({ message: "Failed to save starboard configuration" });
     }
   });
 
   // Delete starboard configuration
-  app.delete("/api/starboard/:guildId", requireAdmin, async (req, res) => {
+  app.delete("/api/starboard", requireAdmin, async (req, res) => {
     try {
-      const success = await storage.deleteStarboardConfig(req.params.guildId);
+      if (!GUILD_ID) {
+        return res.status(500).json({ message: "Guild ID not configured" });
+      }
+      const success = await storage.deleteStarboardConfig(GUILD_ID);
       if (!success) {
         return res.status(404).json({ message: "Starboard configuration not found" });
       }
@@ -967,21 +963,13 @@ export async function registerRoutes(
   // AUTOREACT CONFIGURATION ROUTES (Admin only)
   // ============================================
 
-  // Get all autoreact configurations
+  // Get autoreact config for the configured guild
   app.get("/api/autoreact", requireAdmin, async (req, res) => {
     try {
-      const configs = await storage.getAutoreactConfigs();
-      res.json(configs);
-    } catch (err) {
-      console.error("Error fetching autoreact configs:", err);
-      res.status(500).json({ message: "Failed to fetch autoreact configurations" });
-    }
-  });
-
-  // Get autoreact config for specific guild
-  app.get("/api/autoreact/:guildId", requireAdmin, async (req, res) => {
-    try {
-      const config = await storage.getAutoreactConfig(req.params.guildId);
+      if (!GUILD_ID) {
+        return res.status(500).json({ message: "Guild ID not configured" });
+      }
+      const config = await storage.getAutoreactConfig(GUILD_ID);
       if (!config) {
         return res.status(404).json({ message: "AutoReact configuration not found" });
       }
@@ -992,51 +980,53 @@ export async function registerRoutes(
     }
   });
 
-  // Create autoreact configuration
+  // Create or update autoreact configuration
   app.post("/api/autoreact", requireAdmin, async (req, res) => {
     try {
-      const user = req.user as Express.User;
-      const { guildId, channelId, type, emojis } = req.body;
+      if (!GUILD_ID) {
+        return res.status(500).json({ message: "Guild ID not configured" });
+      }
 
-      const config = await storage.createAutoreactConfig({
-        guildId,
-        channelId,
-        type,
-        emojis,
-        createdBy: user.discordId,
-      });
-
-      res.json(config);
-    } catch (err) {
-      console.error("Error creating autoreact config:", err);
-      res.status(500).json({ message: "Failed to create autoreact configuration" });
-    }
-  });
-
-  // Update autoreact configuration
-  app.put("/api/autoreact/:guildId", requireAdmin, async (req, res) => {
-    try {
       const user = req.user as Express.User;
       const { channelId, type, emojis } = req.body;
 
-      const config = await storage.updateAutoreactConfig(req.params.guildId, {
-        channelId,
-        type,
-        emojis,
-        createdBy: user.discordId,
-      });
+      // Check if config already exists
+      const existing = await storage.getAutoreactConfig(GUILD_ID);
+
+      let config;
+      if (existing) {
+        // Update existing
+        config = await storage.updateAutoreactConfig(GUILD_ID, {
+          channelId,
+          type,
+          emojis,
+          createdBy: user.discordId,
+        });
+      } else {
+        // Create new
+        config = await storage.createAutoreactConfig({
+          guildId: GUILD_ID,
+          channelId,
+          type,
+          emojis,
+          createdBy: user.discordId,
+        });
+      }
 
       res.json(config);
     } catch (err) {
-      console.error("Error updating autoreact config:", err);
-      res.status(500).json({ message: "Failed to update autoreact configuration" });
+      console.error("Error saving autoreact config:", err);
+      res.status(500).json({ message: "Failed to save autoreact configuration" });
     }
   });
 
   // Delete autoreact configuration
-  app.delete("/api/autoreact/:guildId", requireAdmin, async (req, res) => {
+  app.delete("/api/autoreact", requireAdmin, async (req, res) => {
     try {
-      const success = await storage.deleteAutoreactConfig(req.params.guildId);
+      if (!GUILD_ID) {
+        return res.status(500).json({ message: "Guild ID not configured" });
+      }
+      const success = await storage.deleteAutoreactConfig(GUILD_ID);
       if (!success) {
         return res.status(404).json({ message: "AutoReact configuration not found" });
       }

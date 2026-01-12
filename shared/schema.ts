@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -162,7 +162,7 @@ export const starboardConfig = pgTable("starboard_config", {
   guildId: text("guild_id").notNull().unique(),
   monitoredChannelId: text("monitored_channel_id").notNull(),
   emoji: text("emoji").notNull(),
-  threshold: serial("threshold").notNull().default(5),
+  threshold: integer("threshold").notNull().default(5),
   starboardChannelId: text("starboard_channel_id").notNull(),
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at").defaultNow(),

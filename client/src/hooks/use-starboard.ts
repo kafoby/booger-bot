@@ -12,38 +12,18 @@ export interface StarboardConfig {
   updatedAt: string;
 }
 
-export interface CreateStarboardConfig {
-  guildId: string;
+export interface SaveStarboardConfig {
   monitoredChannelId: string;
   emoji: string;
   threshold: number;
   starboardChannelId: string;
 }
 
-export interface UpdateStarboardConfig {
-  monitoredChannelId: string;
-  emoji: string;
-  threshold: number;
-  starboardChannelId: string;
-}
-
-export function useStarboardConfigs() {
+export function useStarboardConfig() {
   return useQuery({
     queryKey: ["/api/starboard"],
     queryFn: async () => {
       const res = await fetch("/api/starboard", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch starboard configurations");
-      return res.json() as Promise<StarboardConfig[]>;
-    },
-  });
-}
-
-export function useStarboardConfig(guildId: string | null) {
-  return useQuery({
-    queryKey: ["/api/starboard", guildId],
-    enabled: !!guildId,
-    queryFn: async () => {
-      const res = await fetch(`/api/starboard/${guildId}`, { credentials: "include" });
       if (!res.ok) {
         if (res.status === 404) return null;
         throw new Error("Failed to fetch starboard configuration");
@@ -53,17 +33,17 @@ export function useStarboardConfig(guildId: string | null) {
   });
 }
 
-export function useCreateStarboardConfig() {
+export function useSaveStarboardConfig() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: CreateStarboardConfig) => {
+    mutationFn: async (data: SaveStarboardConfig) => {
       const res = await fetch("/api/starboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to create starboard configuration");
+      if (!res.ok) throw new Error("Failed to save starboard configuration");
       return res.json();
     },
     onSuccess: () => {
@@ -72,31 +52,11 @@ export function useCreateStarboardConfig() {
   });
 }
 
-export function useUpdateStarboardConfig() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ guildId, ...data }: UpdateStarboardConfig & { guildId: string }) => {
-      const res = await fetch(`/api/starboard/${guildId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to update starboard configuration");
-      return res.json();
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/starboard"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/starboard", variables.guildId] });
-    },
-  });
-}
-
 export function useDeleteStarboardConfig() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (guildId: string) => {
-      const res = await fetch(`/api/starboard/${guildId}`, {
+    mutationFn: async () => {
+      const res = await fetch("/api/starboard", {
         method: "DELETE",
         credentials: "include",
       });
