@@ -1,125 +1,82 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
 import json
 import os
 from typing import Dict, Set
+from config.settings import config
 
-STARBOARD_FILE = "data/starboard.json"
+
+STARRED_MESSAGES_FILE = "data/starred_messages.json"
 
 
 class Starboard(commands.Cog):
-    """Starboard feature - highlight popular messages with reactions"""
+    """Starboard feature - highlight popular messages with reactions
+
+    Configuration is managed via the dashboard and fetched from the API.
+    Starred message tracking is stored locally to prevent duplicates.
+    """
 
     def __init__(self, bot):
         self.bot = bot
-        self.starboard_config = self._load_config()
+        self.starred_messages = self._load_starred_messages()
 
-    def _load_config(self) -> Dict:
-        """Load starboard configuration from JSON file"""
+    def _load_starred_messages(self) -> Dict[str, list]:
+        """Load starred message IDs from JSON file to prevent duplicates"""
         if not os.path.exists("data"):
             os.makedirs("data")
 
-        if os.path.exists(STARBOARD_FILE):
+        if os.path.exists(STARRED_MESSAGES_FILE):
             try:
-                with open(STARBOARD_FILE, "r") as f:
-                    data = json.load(f)
-                    # Convert starred_messages lists back to sets
-                    for guild_id, config in data.items():
-                        if "starred_messages" in config:
-                            config["starred_messages"] = set(config["starred_messages"])
-                    return data
+                with open(STARRED_MESSAGES_FILE, "r") as f:
+                    return json.load(f)
             except Exception as e:
-                print(f"Error loading starboard config: {e}")
+                print(f"Error loading starred messages: {e}")
                 return {}
         return {}
 
-    def _save_config(self):
-        """Save starboard configuration to JSON file"""
+    def _save_starred_messages(self):
+        """Save starred message IDs to JSON file"""
         try:
-            # Convert sets to lists for JSON serialization
-            data = {}
-            for guild_id, config in self.starboard_config.items():
-                data[guild_id] = config.copy()
-                if "starred_messages" in data[guild_id]:
-                    data[guild_id]["starred_messages"] = list(data[guild_id]["starred_messages"])
-
-            with open(STARBOARD_FILE, "w") as f:
-                json.dump(data, f, indent=4)
+            with open(STARRED_MESSAGES_FILE, "w") as f:
+                json.dump(self.starred_messages, f, indent=4)
         except Exception as e:
-            print(f"Error saving starboard config: {e}")
+            print(f"Error saving starred messages: {e}")
 
-    @app_commands.command(name="starboard", description="Set up the starboard feature")
-    @app_commands.describe(
-        monitored_channel="Channel to monitor for reactions",
-        emoji="Emoji to trigger the starboard (e.g. ⭐, 👍, 👎)",
-        threshold="Number of reactions needed",
-        starboard_channel="Channel to post starred messages"
-    )
-    async def starboard(
-        self,
-        interaction: discord.Interaction,
-        monitored_channel: discord.TextChannel,
-        emoji: str,
-        threshold: int,
-        starboard_channel: discord.TextChannel
-    ):
-        """Configure starboard settings for this server"""
-        # Check permissions
-        if not interaction.user.guild_permissions.manage_messages:
-            await interaction.response.send_message(
-                "You need Manage Messages permission to use this command.",
-                ephemeral=True
-            )
-            return
+    def _get_guild_starred_messages(self, guild_id: str) -> Set[int]:
+        """Get set of starred message IDs for a guild"""
+        if guild_id not in self.starred_messages:
+            self.starred_messages[guild_id] = []
+        return set(self.starred_messages[guild_id])
 
-        # Validate threshold
-        if threshold < 1:
-            await interaction.response.send_message(
-                "Threshold must be at least 1.",
-                ephemeral=True
-            )
-            return
-
-        # Store configuration
-        guild_id = str(interaction.guild.id)
-        self.starboard_config[guild_id] = {
-            "monitored_channel_id": monitored_channel.id,
-            "emoji": emoji,
-            "threshold": threshold,
-            "starboard_channel_id": starboard_channel.id,
-            "starred_messages": set()
-        }
-
-        # Save to file
-        self._save_config()
-
-        # Create response embed
-        embed = discord.Embed(title="Starboard Set Up", color=0x9b59b6)
-        embed.description = (
-            f"Monitoring {monitored_channel.mention} for {emoji} reactions (threshold: {threshold})\n"
-            f"Starred messages will post in {starboard_channel.mention}"
-        )
-
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+    def _add_starred_message(self, guild_id: str, message_id: int):
+        """Add a message ID to the starred set for a guild"""
+        if guild_id not in self.starred_messages:
+            self.starred_messages[guild_id] = []
+        if message_id not in self.starred_messages[guild_id]:
+            self.starred_messages[guild_id].append(message_id)
+            self._save_starred_messages()
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         """Handle reaction additions for starboard"""
-        # Get guild config
+        # Get guild ID as string for consistency with config structure
         guild_id = str(payload.guild_id)
-        config = self.starboard_config.get(guild_id)
+
+        # Get starboard config from ConfigManager (fetched from dashboard)
+        starboard_config = config.starboard_config.get(guild_id)
 
         # Check if starboard is configured for this guild
-        if not config:
+        if not starboard_config:
             return
 
         # Check if reaction is in monitored channel
-        if payload.channel_id != config["monitored_channel_id"]:
+        monitored_channel_id = starboard_config.get("monitored_channel_id")
+        if not monitored_channel_id or payload.channel_id != monitored_channel_id:
             return
 
         # Check if reaction is the configured emoji
-        if str(payload.emoji) != config["emoji"]:
+        configured_emoji = starboard_config.get("emoji")
+        if not configured_emoji or str(payload.emoji) != configured_emoji:
             return
 
         # Get guild and channel
@@ -141,16 +98,22 @@ class Starboard(commands.Cog):
             return
 
         # Check if message is already starred
-        if message.id in config["starred_messages"]:
+        starred_set = self._get_guild_starred_messages(guild_id)
+        if message.id in starred_set:
             return
 
         # Get the reaction and check if threshold is met
-        reaction = discord.utils.get(message.reactions, emoji=str(payload.emoji))
-        if not reaction or reaction.count < config["threshold"]:
+        threshold = starboard_config.get("threshold", 5)
+        reaction = discord.utils.get(message.reactions, emoji=configured_emoji)
+        if not reaction or reaction.count < threshold:
             return
 
         # Get starboard channel
-        starboard_channel = guild.get_channel(config["starboard_channel_id"])
+        starboard_channel_id = starboard_config.get("starboard_channel_id")
+        if not starboard_channel_id:
+            return
+
+        starboard_channel = guild.get_channel(starboard_channel_id)
         if not starboard_channel:
             print(f"Starboard channel not found for guild {guild.name}")
             return
@@ -174,7 +137,7 @@ class Starboard(commands.Cog):
         )
 
         # Add footer with reaction count
-        embed.set_footer(text=f"{config['emoji']} {reaction.count}")
+        embed.set_footer(text=f"{configured_emoji} {reaction.count}")
 
         # Add image if present
         if message.attachments:
@@ -189,8 +152,7 @@ class Starboard(commands.Cog):
             await starboard_channel.send(embed=embed)
 
             # Mark message as starred
-            config["starred_messages"].add(message.id)
-            self._save_config()
+            self._add_starred_message(guild_id, message.id)
         except discord.Forbidden:
             print(f"Missing permissions to send to starboard channel in {guild.name}")
         except Exception as e:

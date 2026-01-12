@@ -33,7 +33,8 @@ class ConfigManager:
         self.prefix = DEFAULT_PREFIX
         self.disabled_commands: List[str] = []
         self.allowed_channels: List[int] = DEFAULT_ALLOWED_CHANNELS
-        
+        self.starboard_config: Dict[str, Dict[str, Any]] = {}  # {guild_id: {config}}
+
         # Runtime Flags
         self.rape_enabled = False
         self.start_time = None
@@ -42,12 +43,19 @@ class ConfigManager:
         """Update dynamic configuration from API response"""
         self.prefix = config_data.get("prefix", DEFAULT_PREFIX)
         self.disabled_commands = config_data.get("disabledCommands") or []
-        
+
         channels = config_data.get("allowedChannels")
         if channels:
             self.allowed_channels = [int(c) for c in channels]
         else:
             self.allowed_channels = []
+
+        # Update starboard configuration
+        starboard_data = config_data.get("starboard")
+        if starboard_data:
+            self.starboard_config = starboard_data
+        else:
+            self.starboard_config = {}
 
     def is_command_disabled(self, command_name: str) -> bool:
         return command_name in self.disabled_commands
