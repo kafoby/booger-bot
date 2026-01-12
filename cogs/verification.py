@@ -219,7 +219,6 @@ class Verification(commands.Cog):
             description="To access the server, you need to pass the verification check.\n\nClick the **Verify** button below to start.",
             color=VERIFICATION_EMBED_COLOR
         )
-        embed.set_footer(text="Verification System")
 
         # Send to channel with Persistent View
         try:
