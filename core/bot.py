@@ -40,6 +40,7 @@ class DiscordBot(commands.Bot):
         await self.load_extension('cogs.voice')
         await self.load_extension('cogs.levels')
         await self.load_extension('cogs.welcome')
+        await self.load_extension('cogs.starboard')
 
         # Sync slash commands
         try:
