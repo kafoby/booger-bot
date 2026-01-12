@@ -384,8 +384,37 @@ export async function registerRoutes(
   // Get bot config (for bot - protected by API key)
   app.get("/api/bot/config", requireBotApiKey, async (req, res) => {
     try {
-      const config = await storage.getBotConfig();
-      res.json(config);
+      const [config, starboardConfigs, autoreactConfigs] = await Promise.all([
+        storage.getBotConfig(),
+        storage.getStarboardConfigs(),
+        storage.getAutoreactConfigs(),
+      ]);
+
+      // Convert arrays to objects keyed by guildId for easier bot access
+      const starboard: Record<string, any> = {};
+      for (const sc of starboardConfigs) {
+        starboard[sc.guildId] = {
+          monitored_channel_id: parseInt(sc.monitoredChannelId),
+          emoji: sc.emoji,
+          threshold: sc.threshold,
+          starboard_channel_id: parseInt(sc.starboardChannelId),
+        };
+      }
+
+      const autoreact: Record<string, any> = {};
+      for (const ac of autoreactConfigs) {
+        autoreact[ac.guildId] = {
+          channel_id: parseInt(ac.channelId),
+          type: ac.type,
+          emojis: ac.emojis,
+        };
+      }
+
+      res.json({
+        ...config,
+        starboard,
+        autoreact,
+      });
     } catch (err) {
       res.status(500).json({ message: "Failed to fetch config" });
     }
@@ -845,6 +874,176 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error deleting command template mapping:", err);
       res.status(500).json({ message: "Failed to delete command template mapping" });
+    }
+  });
+
+  // ============================================
+  // STARBOARD CONFIGURATION ROUTES (Admin only)
+  // ============================================
+
+  // Get all starboard configurations
+  app.get("/api/starboard", requireAdmin, async (req, res) => {
+    try {
+      const configs = await storage.getStarboardConfigs();
+      res.json(configs);
+    } catch (err) {
+      console.error("Error fetching starboard configs:", err);
+      res.status(500).json({ message: "Failed to fetch starboard configurations" });
+    }
+  });
+
+  // Get starboard config for specific guild
+  app.get("/api/starboard/:guildId", requireAdmin, async (req, res) => {
+    try {
+      const config = await storage.getStarboardConfig(req.params.guildId);
+      if (!config) {
+        return res.status(404).json({ message: "Starboard configuration not found" });
+      }
+      res.json(config);
+    } catch (err) {
+      console.error("Error fetching starboard config:", err);
+      res.status(500).json({ message: "Failed to fetch starboard configuration" });
+    }
+  });
+
+  // Create starboard configuration
+  app.post("/api/starboard", requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as Express.User;
+      const { guildId, monitoredChannelId, emoji, threshold, starboardChannelId } = req.body;
+
+      const config = await storage.createStarboardConfig({
+        guildId,
+        monitoredChannelId,
+        emoji,
+        threshold,
+        starboardChannelId,
+        createdBy: user.discordId,
+      });
+
+      res.json(config);
+    } catch (err) {
+      console.error("Error creating starboard config:", err);
+      res.status(500).json({ message: "Failed to create starboard configuration" });
+    }
+  });
+
+  // Update starboard configuration
+  app.put("/api/starboard/:guildId", requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as Express.User;
+      const { monitoredChannelId, emoji, threshold, starboardChannelId } = req.body;
+
+      const config = await storage.updateStarboardConfig(req.params.guildId, {
+        monitoredChannelId,
+        emoji,
+        threshold,
+        starboardChannelId,
+        createdBy: user.discordId,
+      });
+
+      res.json(config);
+    } catch (err) {
+      console.error("Error updating starboard config:", err);
+      res.status(500).json({ message: "Failed to update starboard configuration" });
+    }
+  });
+
+  // Delete starboard configuration
+  app.delete("/api/starboard/:guildId", requireAdmin, async (req, res) => {
+    try {
+      const success = await storage.deleteStarboardConfig(req.params.guildId);
+      if (!success) {
+        return res.status(404).json({ message: "Starboard configuration not found" });
+      }
+      res.json({ message: "Starboard configuration deleted" });
+    } catch (err) {
+      console.error("Error deleting starboard config:", err);
+      res.status(500).json({ message: "Failed to delete starboard configuration" });
+    }
+  });
+
+  // ============================================
+  // AUTOREACT CONFIGURATION ROUTES (Admin only)
+  // ============================================
+
+  // Get all autoreact configurations
+  app.get("/api/autoreact", requireAdmin, async (req, res) => {
+    try {
+      const configs = await storage.getAutoreactConfigs();
+      res.json(configs);
+    } catch (err) {
+      console.error("Error fetching autoreact configs:", err);
+      res.status(500).json({ message: "Failed to fetch autoreact configurations" });
+    }
+  });
+
+  // Get autoreact config for specific guild
+  app.get("/api/autoreact/:guildId", requireAdmin, async (req, res) => {
+    try {
+      const config = await storage.getAutoreactConfig(req.params.guildId);
+      if (!config) {
+        return res.status(404).json({ message: "AutoReact configuration not found" });
+      }
+      res.json(config);
+    } catch (err) {
+      console.error("Error fetching autoreact config:", err);
+      res.status(500).json({ message: "Failed to fetch autoreact configuration" });
+    }
+  });
+
+  // Create autoreact configuration
+  app.post("/api/autoreact", requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as Express.User;
+      const { guildId, channelId, type, emojis } = req.body;
+
+      const config = await storage.createAutoreactConfig({
+        guildId,
+        channelId,
+        type,
+        emojis,
+        createdBy: user.discordId,
+      });
+
+      res.json(config);
+    } catch (err) {
+      console.error("Error creating autoreact config:", err);
+      res.status(500).json({ message: "Failed to create autoreact configuration" });
+    }
+  });
+
+  // Update autoreact configuration
+  app.put("/api/autoreact/:guildId", requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as Express.User;
+      const { channelId, type, emojis } = req.body;
+
+      const config = await storage.updateAutoreactConfig(req.params.guildId, {
+        channelId,
+        type,
+        emojis,
+        createdBy: user.discordId,
+      });
+
+      res.json(config);
+    } catch (err) {
+      console.error("Error updating autoreact config:", err);
+      res.status(500).json({ message: "Failed to update autoreact configuration" });
+    }
+  });
+
+  // Delete autoreact configuration
+  app.delete("/api/autoreact/:guildId", requireAdmin, async (req, res) => {
+    try {
+      const success = await storage.deleteAutoreactConfig(req.params.guildId);
+      if (!success) {
+        return res.status(404).json({ message: "AutoReact configuration not found" });
+      }
+      res.json({ message: "AutoReact configuration deleted" });
+    } catch (err) {
+      console.error("Error deleting autoreact config:", err);
+      res.status(500).json({ message: "Failed to delete autoreact configuration" });
     }
   });
 

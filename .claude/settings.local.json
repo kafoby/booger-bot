@@ -17,7 +17,8 @@
       "Bash(pip install:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(python main.py:*)"
+      "Bash(python main.py:*)",
+      "Bash(tree:*)"
     ]
   }
 }

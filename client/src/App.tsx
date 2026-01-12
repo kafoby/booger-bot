@@ -11,6 +11,8 @@ import Config from "@/pages/Config";
 import Performance from "@/pages/Performance";
 import Users from "@/pages/Users";
 import EmbedBuilder from "@/pages/EmbedBuilder";
+import Starboard from "@/pages/Starboard";
+import AutoReact from "@/pages/AutoReact";
 import NotFound from "@/pages/not-found";
 
 // Removed FloatingParticles - too AI-generic and mechanical
@@ -79,6 +81,12 @@ function Router() {
       </Route>
       <Route path="/users">
         <ProtectedRoute component={Users} />
+      </Route>
+      <Route path="/starboard">
+        <ProtectedRoute component={Starboard} />
+      </Route>
+      <Route path="/autoreact">
+        <ProtectedRoute component={AutoReact} />
       </Route>
       <Route path="/">
         <ProtectedRoute component={Dashboard} />

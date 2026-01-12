@@ -34,6 +34,7 @@ class ConfigManager:
         self.disabled_commands: List[str] = []
         self.allowed_channels: List[int] = DEFAULT_ALLOWED_CHANNELS
         self.starboard_config: Dict[str, Dict[str, Any]] = {}  # {guild_id: {config}}
+        self.autoreact_config: Dict[str, Dict[str, Any]] = {}  # {guild_id: {config}}
 
         # Runtime Flags
         self.rape_enabled = False
@@ -56,6 +57,13 @@ class ConfigManager:
             self.starboard_config = starboard_data
         else:
             self.starboard_config = {}
+
+        # Update autoreact configuration
+        autoreact_data = config_data.get("autoreact")
+        if autoreact_data:
+            self.autoreact_config = autoreact_data
+        else:
+            self.autoreact_config = {}
 
     def is_command_disabled(self, command_name: str) -> bool:
         return command_name in self.disabled_commands

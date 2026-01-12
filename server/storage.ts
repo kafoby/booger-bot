@@ -1,13 +1,15 @@
 import { db } from "./db";
 import {
   logs, warns, lfmConnections, users, botStatus, botConfig, adminUsers, authBypassUsers, searchPresets,
-  embedTemplates, commandTemplateMappings,
+  embedTemplates, commandTemplateMappings, starboardConfig, autoreactConfig,
   type InsertLog, type Log, type InsertWarn, type Warn,
   type InsertLfmConnection, type LfmConnection, type User, type InsertUser,
   type BotStatus, type BotConfig, type AdminUser, type AuthBypassUser,
   type SearchPreset, type InsertSearchPreset,
   type EmbedTemplate, type InsertEmbedTemplate,
-  type CommandTemplateMapping, type InsertCommandTemplateMapping
+  type CommandTemplateMapping, type InsertCommandTemplateMapping,
+  type StarboardConfig, type InsertStarboardConfig,
+  type AutoreactConfig, type InsertAutoreactConfig
 } from "@shared/schema";
 import { eq, desc, count, sql, and, gte, lte } from "drizzle-orm";
 
@@ -113,6 +115,18 @@ export interface IStorage {
   createCommandTemplateMapping(mapping: InsertCommandTemplateMapping): Promise<CommandTemplateMapping>;
   updateCommandTemplateMapping(id: number, mapping: Partial<InsertCommandTemplateMapping>): Promise<CommandTemplateMapping>;
   deleteCommandTemplateMapping(id: number): Promise<boolean>;
+  // Starboard configuration methods
+  getStarboardConfigs(): Promise<StarboardConfig[]>;
+  getStarboardConfig(guildId: string): Promise<StarboardConfig | undefined>;
+  createStarboardConfig(config: InsertStarboardConfig): Promise<StarboardConfig>;
+  updateStarboardConfig(guildId: string, config: Partial<InsertStarboardConfig>): Promise<StarboardConfig>;
+  deleteStarboardConfig(guildId: string): Promise<boolean>;
+  // AutoReact configuration methods
+  getAutoreactConfigs(): Promise<AutoreactConfig[]>;
+  getAutoreactConfig(guildId: string): Promise<AutoreactConfig | undefined>;
+  createAutoreactConfig(config: InsertAutoreactConfig): Promise<AutoreactConfig>;
+  updateAutoreactConfig(guildId: string, config: Partial<InsertAutoreactConfig>): Promise<AutoreactConfig>;
+  deleteAutoreactConfig(guildId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -747,6 +761,64 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCommandTemplateMapping(id: number): Promise<boolean> {
     const result = await db.delete(commandTemplateMappings).where(eq(commandTemplateMappings.id, id)).returning({ id: commandTemplateMappings.id });
+    return result.length > 0;
+  }
+
+  // Starboard configuration methods
+  async getStarboardConfigs(): Promise<StarboardConfig[]> {
+    return await db.select().from(starboardConfig).orderBy(starboardConfig.guildId);
+  }
+
+  async getStarboardConfig(guildId: string): Promise<StarboardConfig | undefined> {
+    const result = await db.select().from(starboardConfig).where(eq(starboardConfig.guildId, guildId));
+    return result[0];
+  }
+
+  async createStarboardConfig(config: InsertStarboardConfig): Promise<StarboardConfig> {
+    const [created] = await db.insert(starboardConfig).values(config).returning();
+    return created;
+  }
+
+  async updateStarboardConfig(guildId: string, config: Partial<InsertStarboardConfig>): Promise<StarboardConfig> {
+    const [updated] = await db
+      .update(starboardConfig)
+      .set({ ...config, updatedAt: new Date() })
+      .where(eq(starboardConfig.guildId, guildId))
+      .returning();
+    return updated;
+  }
+
+  async deleteStarboardConfig(guildId: string): Promise<boolean> {
+    const result = await db.delete(starboardConfig).where(eq(starboardConfig.guildId, guildId)).returning({ id: starboardConfig.id });
+    return result.length > 0;
+  }
+
+  // AutoReact configuration methods
+  async getAutoreactConfigs(): Promise<AutoreactConfig[]> {
+    return await db.select().from(autoreactConfig).orderBy(autoreactConfig.guildId);
+  }
+
+  async getAutoreactConfig(guildId: string): Promise<AutoreactConfig | undefined> {
+    const result = await db.select().from(autoreactConfig).where(eq(autoreactConfig.guildId, guildId));
+    return result[0];
+  }
+
+  async createAutoreactConfig(config: InsertAutoreactConfig): Promise<AutoreactConfig> {
+    const [created] = await db.insert(autoreactConfig).values(config).returning();
+    return created;
+  }
+
+  async updateAutoreactConfig(guildId: string, config: Partial<InsertAutoreactConfig>): Promise<AutoreactConfig> {
+    const [updated] = await db
+      .update(autoreactConfig)
+      .set({ ...config, updatedAt: new Date() })
+      .where(eq(autoreactConfig.guildId, guildId))
+      .returning();
+    return updated;
+  }
+
+  async deleteAutoreactConfig(guildId: string): Promise<boolean> {
+    const result = await db.delete(autoreactConfig).where(eq(autoreactConfig.guildId, guildId)).returning({ id: autoreactConfig.id });
     return result.length > 0;
   }
 }

@@ -1,4 +1,4 @@
-import { LogOut, Shield, Settings, ChevronDown, BarChart3, Users, Activity, LayoutTemplate } from "lucide-react";
+import { LogOut, Shield, Settings, ChevronDown, BarChart3, Users, Activity, LayoutTemplate, Star, Smile } from "lucide-react";
 import { useAuth, getDiscordAvatarUrl } from "@/lib/auth";
 import { useBotStatus } from "@/hooks/use-bot-status";
 import { Button } from "@/components/ui/button";
@@ -186,6 +186,18 @@ export function Header() {
                     <DropdownMenuItem className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-white/70 hover:text-white/90">
                       <Settings className="mr-2 h-4 w-4" />
                       <span>Bot Configuration</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/starboard">
+                    <DropdownMenuItem className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-white/70 hover:text-white/90">
+                      <Star className="mr-2 h-4 w-4" />
+                      <span>Starboard</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/autoreact">
+                    <DropdownMenuItem className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-white/70 hover:text-white/90">
+                      <Smile className="mr-2 h-4 w-4" />
+                      <span>AutoReact</span>
                     </DropdownMenuItem>
                   </Link>
                   <DropdownMenuSeparator className="bg-white/10" />

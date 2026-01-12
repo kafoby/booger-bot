@@ -155,3 +155,36 @@ export type EmbedTemplate = typeof embedTemplates.$inferSelect;
 export type InsertEmbedTemplate = z.infer<typeof insertEmbedTemplateSchema>;
 export type CommandTemplateMapping = typeof commandTemplateMappings.$inferSelect;
 export type InsertCommandTemplateMapping = z.infer<typeof insertCommandTemplateMappingSchema>;
+
+// Starboard configuration (per-guild)
+export const starboardConfig = pgTable("starboard_config", {
+  id: serial("id").primaryKey(),
+  guildId: text("guild_id").notNull().unique(),
+  monitoredChannelId: text("monitored_channel_id").notNull(),
+  emoji: text("emoji").notNull(),
+  threshold: serial("threshold").notNull().default(5),
+  starboardChannelId: text("starboard_channel_id").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// AutoReact configuration (per-guild)
+export const autoreactConfig = pgTable("autoreact_config", {
+  id: serial("id").primaryKey(),
+  guildId: text("guild_id").notNull().unique(),
+  channelId: text("channel_id").notNull(),
+  type: text("type").notNull().default("all"), // "all", "embed", or "file"
+  emojis: text("emojis").array().notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertStarboardConfigSchema = createInsertSchema(starboardConfig).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAutoreactConfigSchema = createInsertSchema(autoreactConfig).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type StarboardConfig = typeof starboardConfig.$inferSelect;
+export type InsertStarboardConfig = z.infer<typeof insertStarboardConfigSchema>;
+export type AutoreactConfig = typeof autoreactConfig.$inferSelect;
+export type InsertAutoreactConfig = z.infer<typeof insertAutoreactConfigSchema>;
