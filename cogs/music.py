@@ -85,13 +85,16 @@ class Music(commands.Cog):
         for _ in range(3):
             try:
                 if vc is None:
-                    vc = await channel.connect(reconnect=True)
+                    vc = await channel.connect(reconnect=True, self_deaf=True, timeout=20.0)
                 elif vc.channel != channel:
                     await vc.move_to(channel)
                 break
             except Exception:
                 if vc:
-                    vc.cleanup()
+                    try:
+                        await vc.disconnect(force=True)
+                    except Exception:
+                        pass
                     vc = None
                 await asyncio.sleep(2)
         else:
