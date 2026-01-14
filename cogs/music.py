@@ -82,10 +82,24 @@ class Music(commands.Cog):
         channel = interaction.user.voice.channel
         vc = interaction.guild.voice_client
 
+        # Ensure Opus is loaded
+        if not discord.opus.is_loaded():
+            try:
+                from ctypes.util import find_library
+                opus_lib = find_library('opus')
+                if opus_lib:
+                    discord.opus.load_opus(opus_lib)
+                else:
+                    # Fallback for some linux distros
+                    discord.opus.load_opus('libopus.so.0')
+            except Exception as e:
+                await interaction.followup.send(f"Voice error: Could not load Opus library. {e}")
+                return
+
         for _ in range(3):
             try:
                 if vc is None:
-                    vc = await channel.connect(reconnect=True, self_deaf=True, timeout=20.0)
+                    vc = await channel.connect(reconnect=False, self_deaf=True, timeout=20.0)
                 elif vc.channel != channel:
                     await vc.move_to(channel)
                 break
