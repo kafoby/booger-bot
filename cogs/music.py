@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands
+from discord import app_commands, ui
 from discord.ext import commands
 import aiohttp
 import asyncio
@@ -40,9 +40,112 @@ ytdl_options = {
 ytdl = yt_dlp.YoutubeDL(ytdl_options)
 
 
+class QueueView(ui.View):
+    """Interactive buttons for queue management"""
+    def __init__(self, music_cog, guild_id):
+        super().__init__(timeout=None)
+        self.music_cog = music_cog
+        self.guild_id = guild_id
+
+    @ui.button(label="⏯ Play/Pause", style=discord.ButtonStyle.primary)
+    async def pause_resume(self, interaction: discord.Interaction, button: ui.Button):
+        player: wavelink.Player = interaction.guild.voice_client
+        if not player:
+            await interaction.response.send_message("Not connected to voice.", ephemeral=True)
+            return
+
+        if player.paused:
+            await player.pause(False)
+            await interaction.response.send_message("▶ Resumed", ephemeral=True)
+        else:
+            await player.pause(True)
+            await interaction.response.send_message("⏸ Paused", ephemeral=True)
+
+    @ui.button(label="⏭ Skip", style=discord.ButtonStyle.primary)
+    async def skip(self, interaction: discord.Interaction, button: ui.Button):
+        player: wavelink.Player = interaction.guild.voice_client
+        if not player:
+            await interaction.response.send_message("Not connected to voice.", ephemeral=True)
+            return
+
+        queue = self.music_cog.guild_queues.get(self.guild_id, [])
+        if queue:
+            next_track = queue.pop(0)
+            await player.play(next_track)
+            await interaction.response.send_message(f"⏭ Skipped. Now playing: **{next_track.title}**", ephemeral=True)
+        else:
+            await player.stop()
+            await interaction.response.send_message("⏭ Skipped. Queue empty.", ephemeral=True)
+
+    @ui.button(label="🔀 Shuffle", style=discord.ButtonStyle.secondary)
+    async def shuffle(self, interaction: discord.Interaction, button: ui.Button):
+        import random
+        queue = self.music_cog.guild_queues.get(self.guild_id, [])
+        if not queue:
+            await interaction.response.send_message("Queue is empty.", ephemeral=True)
+            return
+
+        random.shuffle(queue)
+        await interaction.response.send_message(f"🔀 Shuffled {len(queue)} tracks", ephemeral=True)
+
+    @ui.button(label="🔁 Loop", style=discord.ButtonStyle.secondary)
+    async def toggle_loop(self, interaction: discord.Interaction, button: ui.Button):
+        current = self.music_cog.loop_mode.get(self.guild_id, "off")
+        modes = ["off", "one", "all"]
+        next_mode = modes[(modes.index(current) + 1) % len(modes)]
+        self.music_cog.loop_mode[self.guild_id] = next_mode
+
+        mode_names = {"off": "🔁 Loop: OFF", "one": "🔂 Loop: ONE", "all": "🔁 Loop: ALL"}
+        await interaction.response.send_message(mode_names[next_mode], ephemeral=True)
+
+    @ui.button(label="🗑 Clear Queue", style=discord.ButtonStyle.danger)
+    async def clear(self, interaction: discord.Interaction, button: ui.Button):
+        self.music_cog.guild_queues[self.guild_id] = []
+        await interaction.response.send_message("🗑 Queue cleared", ephemeral=True)
+
+
+class QueueListView(ui.View):
+    """View for showing queue with remove buttons"""
+    def __init__(self, music_cog, guild_id, queue: list):
+        super().__init__(timeout=60)
+        self.music_cog = music_cog
+        self.guild_id = guild_id
+        self.queue = queue
+
+        # Add remove buttons for each track
+        for i, track in enumerate(queue[:10]):  # Only show first 10
+            self.add_item(QueueRemoveButton(music_cog, guild_id, i, track.title))
+
+    async def on_timeout(self):
+        # Remove buttons after timeout
+        for item in self.children:
+            item.disabled = True
+
+
+class QueueRemoveButton(ui.Button):
+    """Button to remove a specific track from queue"""
+    def __init__(self, music_cog, guild_id, index, title):
+        super().__init__(label=f"Remove #{index+1}", style=discord.ButtonStyle.danger)
+        self.music_cog = music_cog
+        self.guild_id = guild_id
+        self.index = index
+        self.title = title
+
+    async def callback(self, interaction: discord.Interaction):
+        queue = self.music_cog.guild_queues.get(self.guild_id, [])
+        if self.index < len(queue):
+            removed = queue.pop(self.index)
+            await interaction.response.send_message(f"❌ Removed: **{removed.title}**", ephemeral=True)
+        else:
+            await interaction.response.send_message("Track already removed.", ephemeral=True)
+
+
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.guild_queues = {}  # {guild_id: [tracks]}
+        self.loop_mode = {}  # {guild_id: "off"|"one"|"all"}
+        self.now_playing_messages = {}  # {guild_id: (channel_id, message_id)}
 
     async def cog_load(self):
         """Called when the cog is loaded. Set up Lavalink connection."""
@@ -69,6 +172,23 @@ class Music(commands.Cog):
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
         print(f"[Music] Track ended: {payload.track.title} (reason: {payload.reason})")
 
+        # Auto-play next track from queue
+        guild_id = payload.player.guild.id
+        queue = self.guild_queues.get(guild_id, [])
+        loop_mode = self.loop_mode.get(guild_id, "off")
+
+        if loop_mode == "one":
+            # Loop current track
+            await payload.player.play(payload.track)
+        elif loop_mode == "all" and queue:
+            # Add back to queue
+            queue.append(payload.track)
+
+        if queue:
+            next_track = queue.pop(0)
+            await payload.player.play(next_track)
+            print(f"[Music] Auto-playing next: {next_track.title}")
+
     @commands.Cog.listener()
     async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
         print(f"[Music] Track exception: {payload.track.title} - {payload.exception}")
@@ -76,6 +196,61 @@ class Music(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_track_stuck(self, payload: wavelink.TrackStuckEventPayload):
         print(f"[Music] Track stuck: {payload.track.title} (threshold: {payload.threshold_ms}ms)")
+
+    async def _update_now_playing_message(self, interaction: discord.Interaction, player: wavelink.Player, guild_id: int):
+        """Update or create the now playing message for a guild"""
+        embed = await self._create_now_playing_embed(player, guild_id)
+        view = QueueView(self, guild_id)
+
+        # Try to edit existing message
+        if guild_id in self.now_playing_messages:
+            try:
+                channel_id, message_id = self.now_playing_messages[guild_id]
+                channel = self.bot.get_channel(channel_id)
+                if channel:
+                    message = await channel.fetch_message(message_id)
+                    await message.edit(embed=embed, view=view)
+                    return
+            except Exception as e:
+                print(f"[Music] Failed to edit now playing message: {e}")
+                # Fall through to create new message
+
+        # Create new message if edit failed or doesn't exist
+        message = await interaction.followup.send(embed=embed, view=view)
+        self.now_playing_messages[guild_id] = (interaction.channel_id, message.id)
+
+    async def _create_now_playing_embed(self, player: wavelink.Player, guild_id: int) -> discord.Embed:
+        """Create a now playing embed with queue info"""
+        current = player.current
+        queue = self.guild_queues.get(guild_id, [])
+        loop_mode = self.loop_mode.get(guild_id, "off")
+
+        if not current:
+            return EmbedBuilder.create_embed(title="Not playing anything")
+
+        # Duration bar
+        duration_secs = current.length // 1000
+        position_secs = player.position // 1000
+        bar_length = 20
+        filled = int((position_secs / duration_secs) * bar_length) if duration_secs > 0 else 0
+        bar = "█" * filled + "░" * (bar_length - filled)
+
+        duration_str = f"{position_secs//60}:{position_secs%60:02d} / {duration_secs//60}:{duration_secs%60:02d}"
+
+        embed = EmbedBuilder.create_embed(
+            title="🎵  Now Playing",
+            description=f"**{current.title}**\nBy {current.author}"
+        )
+        embed.add_field(name="Duration", value=f"```{bar}```{duration_str}", inline=False)
+        embed.add_field(name="Queue Length", value=f"{len(queue)} tracks", inline=True)
+        embed.add_field(name="Loop Mode", value=f"🔁 {loop_mode.upper()}", inline=True)
+        embed.add_field(name="Status", value="⏸ Paused" if player.paused else "▶ Playing", inline=True)
+
+        if queue:
+            next_tracks = "\n".join([f"{i+1}. {t.title}" for i, t in enumerate(queue[:5])])
+            embed.add_field(name="Next in Queue", value=next_tracks, inline=False)
+
+        return embed
 
     @app_commands.command(name="playspotify", description="Play a song from Spotify or YouTube")
     @app_commands.describe(query="Spotify track link or song name")
@@ -157,11 +332,19 @@ class Music(commands.Cog):
             print(f"[playspotify] Track details - Duration: {track.length}ms, Author: {track.author}, Source: {track.source}")
             print(f"[playspotify] Player connected: {player.connected}, Channel: {player.channel}")
 
-            await player.play(track)
-            print(f"[playspotify] Playback started: {track.title}")
-            print(f"[playspotify] Player now playing: {player.current}")
+            # If nothing is playing, play immediately. Otherwise, add to queue
+            if not player.current:
+                await player.play(track)
+                print(f"[playspotify] Playback started: {track.title}")
+            else:
+                if interaction.guild.id not in self.guild_queues:
+                    self.guild_queues[interaction.guild.id] = []
+                self.guild_queues[interaction.guild.id].append(track)
+                print(f"[playspotify] Added to queue: {track.title}")
 
-            await interaction.followup.send(f"Now playing: **{track.title}**")
+            # Update the now playing message (edits existing or creates new)
+            await self._update_now_playing_message(interaction, player, interaction.guild.id)
+
             await BotLogger.log(
                 f"{interaction.user} used /playspotify to play: {track.title}",
                 "info", "output"
@@ -172,6 +355,42 @@ class Music(commands.Cog):
             traceback.print_exc()
             await interaction.followup.send(f"Playback error: {e}")
             await BotLogger.log_error("Error with /playspotify command", e, "command")
+
+    @app_commands.command(name="queue", description="Show the music queue")
+    async def show_queue(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        guild_id = interaction.guild.id
+        queue = self.guild_queues.get(guild_id, [])
+        player = interaction.guild.voice_client
+
+        if not player or not player.current:
+            await interaction.followup.send("Nothing is playing.")
+            return
+
+        await self._update_now_playing_message(interaction, player, guild_id)
+
+    @app_commands.command(name="skip", description="Skip the current track")
+    async def skip_track(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        player = interaction.guild.voice_client
+        if not player:
+            await interaction.followup.send("Not connected to voice.")
+            return
+
+        guild_id = interaction.guild.id
+        queue = self.guild_queues.get(guild_id, [])
+
+        current = player.current
+        if queue:
+            next_track = queue.pop(0)
+            await player.play(next_track)
+            await interaction.followup.send(f"⏭ Skipped. Now playing: **{next_track.title}**")
+            await self._update_now_playing_message(interaction, player, guild_id)
+        else:
+            await player.stop()
+            await interaction.followup.send(f"⏭ Skipped **{current.title}**\nQueue is empty.")
 
     @app_commands.command(name="stop", description="Stop music and disconnect")
     async def stop_music(self, interaction: discord.Interaction):
@@ -187,6 +406,11 @@ class Music(commands.Cog):
             return
 
         try:
+            guild_id = interaction.guild.id
+            if guild_id in self.guild_queues:
+                self.guild_queues[guild_id] = []
+            if guild_id in self.now_playing_messages:
+                del self.now_playing_messages[guild_id]
             await player.disconnect()
             await interaction.followup.send("Disconnected.")
             await BotLogger.log(
