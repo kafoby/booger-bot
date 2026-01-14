@@ -18,7 +18,11 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(python main.py:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(pkg-config:*)",
+      "Bash(ldconfig:*)",
+      "Bash(ls:*)",
+      "Bash(pip show:*)"
     ]
   }
 }

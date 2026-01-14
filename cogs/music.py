@@ -3,36 +3,16 @@ from discord import app_commands
 from discord.ext import commands
 import aiohttp
 import asyncio
-import yt_dlp
-from yt_dlp import utils as yt_dlp_utils
+import wavelink
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import urllib.parse
 import os
+import yt_dlp
 from config.settings import config
+from config.constants import LAVALINK_URI
 from utils.logging import BotLogger
 from utils.embed_builder import EmbedBuilder
-
-# YouTube DL setup
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'ytsearch',
-    'source_address': '0.0.0.0'
-}
-
-ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn'
-}
-
-ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
-yt_dlp_utils.bug_reports_message = lambda: ''
 
 # Spotify setup
 SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
@@ -46,30 +26,62 @@ if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
     except Exception as e:
         print(f"Failed to initialize Spotify: {e}")
 
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.5):
-        super().__init__(source, volume)
-        self.data = data
-        self.title = data.get('title')
-        self.url = data.get('url')
+# Lavalink config
+LAVALINK_PASSWORD = os.getenv('LAVALINK_SERVER_PASSWORD', '')
 
-    @classmethod
-    async def from_url(cls, url, *, loop, stream=True):
-        data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(url, download=not stream))
-        if 'entries' in data:
-            data = data['entries'][0]
-        source = discord.FFmpegPCMAudio(data['url'], **ffmpeg_options)
-        return cls(source, data=data)
+# yt-dlp config
+ytdl_options = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'ytsearch',
+}
+ytdl = yt_dlp.YoutubeDL(ytdl_options)
+
 
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def cog_load(self):
+        """Called when the cog is loaded. Set up Lavalink connection."""
+        print("[Music] Cog loading, setting up Lavalink...")
+        try:
+            node = wavelink.Node(
+                uri=LAVALINK_URI,
+                password=LAVALINK_PASSWORD,
+            )
+            await wavelink.Pool.connect(nodes=[node], client=self.bot, cache_capacity=100)
+            print(f"[Music] Connected to Lavalink at {LAVALINK_URI}")
+        except Exception as e:
+            print(f"[Music] Failed to connect to Lavalink: {e}")
+
+    @commands.Cog.listener()
+    async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
+        print(f"[Music] Wavelink node ready: {payload.node.identifier}")
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
+        print(f"[Music] Track started: {payload.track.title} (duration: {payload.track.length}ms)")
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
+        print(f"[Music] Track ended: {payload.track.title} (reason: {payload.reason})")
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
+        print(f"[Music] Track exception: {payload.track.title} - {payload.exception}")
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_stuck(self, payload: wavelink.TrackStuckEventPayload):
+        print(f"[Music] Track stuck: {payload.track.title} (threshold: {payload.threshold_ms}ms)")
+
     @app_commands.command(name="playspotify", description="Play a song from Spotify or YouTube")
     @app_commands.describe(query="Spotify track link or song name")
     async def playspotify(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer()
+        print(f"[playspotify] Command invoked by {interaction.user} with query: {query}")
 
         if config.is_command_disabled("playspotify"):
             await interaction.followup.send("The `playspotify` command is currently disabled.")
@@ -80,44 +92,30 @@ class Music(commands.Cog):
             return
 
         channel = interaction.user.voice.channel
-        vc = interaction.guild.voice_client
+        print(f"[playspotify] Target channel: {channel}")
 
-        # Ensure Opus is loaded
-        if not discord.opus.is_loaded():
+        # Get or create player
+        player: wavelink.Player = interaction.guild.voice_client
+
+        if player is None:
             try:
-                from ctypes.util import find_library
-                opus_lib = find_library('opus')
-                if opus_lib:
-                    discord.opus.load_opus(opus_lib)
-                else:
-                    # Fallback for some linux distros
-                    discord.opus.load_opus('libopus.so.0')
+                print(f"[playspotify] Connecting to {channel}...")
+                player = await channel.connect(cls=wavelink.Player)
+                print(f"[playspotify] Connected successfully")
             except Exception as e:
-                await interaction.followup.send(f"Voice error: Could not load Opus library. {e}")
+                print(f"[playspotify] Failed to connect: {type(e).__name__}: {e}")
+                await interaction.followup.send(f"Failed to connect to voice channel: {e}")
                 return
+        elif player.channel != channel:
+            print(f"[playspotify] Moving to {channel}...")
+            await player.move_to(channel)
 
-        for _ in range(3):
-            try:
-                if vc is None:
-                    vc = await channel.connect(reconnect=False, self_deaf=True, timeout=20.0)
-                elif vc.channel != channel:
-                    await vc.move_to(channel)
-                break
-            except Exception:
-                if vc:
-                    try:
-                        await vc.disconnect(force=True)
-                    except Exception:
-                        pass
-                    vc = None
-                await asyncio.sleep(2)
-        else:
-            await interaction.followup.send("Failed to connect to voice.")
-            return
-
+        # Parse Spotify URL if needed
         search = query
         if "spotify" in query:
+            print(f"[playspotify] Detected Spotify link, parsing...")
             if not sp:
+                print("[playspotify] Spotify client not configured")
                 await interaction.followup.send("Spotify is not configured.")
                 return
             try:
@@ -128,27 +126,50 @@ class Music(commands.Cog):
                     track_id = query.split("open.spotify.com/track/")[1].split("?")[0]
 
                 if not track_id:
+                    print("[playspotify] Could not extract track ID from URL")
                     await interaction.followup.send("Invalid Spotify track link format.")
                     return
 
+                print(f"[playspotify] Fetching Spotify track: {track_id}")
                 track = sp.track(track_id)
                 search = f"{track['name']} {track['artists'][0]['name']}"
+                print(f"[playspotify] Spotify track resolved to search: {search}")
             except Exception as e:
-                print(f"Spotify parsing error: {e}")
+                print(f"[playspotify] Spotify parsing error: {type(e).__name__}: {e}")
                 await interaction.followup.send("Invalid Spotify track link.")
                 return
 
+        # Search and play via Lavalink (YouTube with fixed plugin)
         try:
-            player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True)
-            if vc.is_playing() or vc.is_paused():
-                vc.stop()
-            vc.play(player)
-            await interaction.followup.send(f"Now playing: **{player.title}**")
+            print(f"[playspotify] Searching for: {search}")
+
+            # Search YouTube via Lavalink's ytsearch
+            print(f"[playspotify] Searching YouTube via Lavalink...")
+            tracks = await wavelink.Playable.search(search, source="ytsearch")
+
+            if not tracks:
+                print("[playspotify] No tracks found")
+                await interaction.followup.send("No results found.")
+                return
+
+            track = tracks[0]
+            print(f"[playspotify] Found track: {track.title}")
+            print(f"[playspotify] Track details - Duration: {track.length}ms, Author: {track.author}, Source: {track.source}")
+            print(f"[playspotify] Player connected: {player.connected}, Channel: {player.channel}")
+
+            await player.play(track)
+            print(f"[playspotify] Playback started: {track.title}")
+            print(f"[playspotify] Player now playing: {player.current}")
+
+            await interaction.followup.send(f"Now playing: **{track.title}**")
             await BotLogger.log(
-                f"{interaction.user} used /playspotify to play: {player.title}",
+                f"{interaction.user} used /playspotify to play: {track.title}",
                 "info", "output"
             )
         except Exception as e:
+            print(f"[playspotify] Playback error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             await interaction.followup.send(f"Playback error: {e}")
             await BotLogger.log_error("Error with /playspotify command", e, "command")
 
@@ -160,21 +181,13 @@ class Music(commands.Cog):
             await interaction.followup.send("The `stop` command is currently disabled.")
             return
 
-        vc = interaction.guild.voice_client
-        if not vc:
+        player: wavelink.Player = interaction.guild.voice_client
+        if not player:
             await interaction.followup.send("Not connected.")
             return
 
         try:
-            if vc.is_playing() or vc.is_paused():
-                vc.stop()
-            await asyncio.wait_for(vc.disconnect(force=True), timeout=10)
-            await interaction.followup.send("Disconnected.")
-            await BotLogger.log(
-                f"{interaction.user} used /stop to disconnect from voice", "info", "command"
-            )
-        except asyncio.TimeoutError:
-            vc.cleanup()
+            await player.disconnect()
             await interaction.followup.send("Disconnected.")
             await BotLogger.log(
                 f"{interaction.user} used /stop to disconnect from voice", "info", "command"
@@ -197,10 +210,10 @@ class Music(commands.Cog):
                     "discordUserId": str(ctx.author.id),
                     "lastfmUsername": lfm_username
                 }
-                # LFM_URL logic needs to be verified. Assuming it's in constants or settings. 
+                # LFM_URL logic needs to be verified. Assuming it's in constants or settings.
                 # Original bot.py imported LFM_URL from config.constants
                 from config.constants import LFM_URL
-                
+
                 async with session.post(
                         LFM_URL,
                         json=payload,

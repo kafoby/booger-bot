@@ -6,6 +6,9 @@ LFM_URL = f"{API_BASE_URL}/lfm"
 HEARTBEAT_URL = f"{API_BASE_URL}/bot/heartbeat"
 CONFIG_URL = f"{API_BASE_URL}/bot/config"
 
+# Lavalink
+LAVALINK_URI = "https://lavalink-2026-production-bd9b.up.railway.app"
+
 # IDs
 TESTING_CHANNEL_ID = 1452216636819112010
 ADMIN_USER_IDS = [

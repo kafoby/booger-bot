@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["nettools", "vim", "cl-launch", "psmisc", "thefuck", "google-cloud-sdk", "git-filter-repo", "fastfetch"]
+packages = ["nettools", "vim", "cl-launch", "psmisc", "thefuck", "google-cloud-sdk", "git-filter-repo", "fastfetch", "btop", "deno", "libopus", "ffmpeg"]
 
 [[ports]]
 localPort = 3000
@@ -46,3 +46,7 @@ args = "npm run dev"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
+
+[userenv]
+
+[userenv.shared]
