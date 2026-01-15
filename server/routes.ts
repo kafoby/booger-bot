@@ -14,7 +14,7 @@ const BOT_API_KEY = process.env.BOT_API_KEY;
 // Last.fm API credentials
 const LASTFM_API_KEY = process.env.LASTFM_API_KEY;
 const LASTFM_API_SECRET = process.env.LASTFM_API_SECRET;
-const LASTFM_CALLBACK_URL = process.env.LASTFM_CALLBACK_URL || "https://booger.bot/lastfm-callback";
+const LASTFM_CALLBACK_URL = process.env.LASTFM_CALLBACK_URL || "https://booger.bot/api/lfm/auth/callback";
 
 // Temporary storage for auth tokens (in production, use Redis or database)
 const authTokens = new Map<string, { discordUserId: string; expiresAt: number }>();

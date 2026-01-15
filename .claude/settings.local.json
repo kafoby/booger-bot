@@ -26,7 +26,20 @@
       "Bash(npm run db:generate:*)",
       "Bash(npm run)",
       "Bash(sqlite3:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(chmod:*)",
+      "Bash(./start-all.sh)",
+      "Bash(if [ -z \"$LASTFM_API_KEY\" ])",
+      "Bash(then echo \"❌ LASTFM_API_KEY not set\")",
+      "Bash(else echo \"✓ LASTFM_API_KEY is set\")",
+      "Bash(fi)",
+      "Bash(if [ -z \"$LASTFM_API_SECRET\" ])",
+      "Bash(then echo \"❌ LASTFM_API_SECRET not set\")",
+      "Bash(else echo \"✓ LASTFM_API_SECRET is set\")",
+      "Bash(killall:*)",
+      "Bash(xargs kill:*)",
+      "Bash(npm run dev:*)",
+      "Bash(kill:*)"
     ]
   }
 }

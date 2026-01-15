@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["nettools", "vim", "cl-launch", "psmisc", "thefuck", "google-cloud-sdk", "git-filter-repo", "fastfetch", "btop", "deno", "libopus", "ffmpeg"]
+packages = ["nettools", "vim", "cl-launch", "psmisc", "thefuck", "google-cloud-sdk", "git-filter-repo", "fastfetch", "btop", "deno", "libopus", "ffmpeg", "ack"]
 
 [[ports]]
 localPort = 3000

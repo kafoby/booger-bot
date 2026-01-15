@@ -43,6 +43,7 @@ class DiscordBot(commands.Bot):
         await self.load_extension('cogs.starboard')
         await self.load_extension('cogs.autoreact')
         await self.load_extension('cogs.verification')
+        await self.load_extension('cogs.lastfm')
 
         # Sync slash commands
         try:
