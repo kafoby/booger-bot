@@ -1,5 +1,7 @@
+from config.settings import config
+
 # API Endpoints
-API_BASE_URL = "http://127.0.0.1:5000/api"
+API_BASE_URL = config.API_BASE_URL
 LOGS_URL = f"{API_BASE_URL}/logs"
 WARNS_URL = f"{API_BASE_URL}/warns"
 LFM_URL = f"{API_BASE_URL}/lfm"
