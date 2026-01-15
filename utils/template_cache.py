@@ -3,6 +3,7 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict
+from config.settings import config
 
 class TemplateCache:
     """In-memory cache for embed templates with TTL"""
@@ -11,8 +12,6 @@ class TemplateCache:
         self.cache: Dict[str, dict] = {}
         self.cache_times: Dict[str, datetime] = {}
         self.ttl = timedelta(minutes=ttl_minutes)
-        self.api_url = os.getenv("API_BASE_URL", "http://localhost:5000")
-        self.bot_api_key = os.getenv("BOT_API_KEY")
 
     async def get_template(self, command_name: str, context: str = "default") -> Optional[dict]:
         """
@@ -52,11 +51,10 @@ class TemplateCache:
             Template data dict or None if not found
         """
         try:
-            headers = {}
-            if self.bot_api_key:
-                headers["X-Bot-API-Key"] = self.bot_api_key
+            headers = config.get_api_headers()
 
-            url = f"{self.api_url}/api/bot/template/{command_name}"
+            # config.API_BASE_URL is like "http://localhost:5000/api"
+            url = f"{config.API_BASE_URL}/bot/template/{command_name}"
             if context:
                 url += f"?context={context}"
 

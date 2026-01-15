@@ -150,7 +150,7 @@ class Music(commands.Cog):
         self.now_playing_messages = {}  # {guild_id: (channel_id, message_id)}
         self.scrobble_tasks = {}  # {guild_id: asyncio.Task}
         self.track_listeners = {}  # {guild_id: {user_id: start_time}}
-        self.api_base = "http://localhost:3000/api"
+        self.api_base = config.API_BASE_URL
 
     async def cog_load(self):
         """Called when the cog is loaded. Set up Lavalink connection."""

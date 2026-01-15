@@ -30,6 +30,9 @@ class ConfigManager:
         self.SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
         self.SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 
+        # API Configuration
+        self.API_BASE_URL = os.getenv('API_URL', 'http://localhost:5000/api')
+
         # Dynamic Config
         self.prefix = DEFAULT_PREFIX
         self.disabled_commands: List[str] = []

@@ -16,7 +16,7 @@ class LastFm(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.api_base = "http://localhost:3000/api"
+        self.api_base = config.API_BASE_URL
 
     async def _api_request(
         self,

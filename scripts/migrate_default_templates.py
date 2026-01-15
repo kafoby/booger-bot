@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:5000")
+API_BASE_URL = os.getenv("API_URL", "http://localhost:5000/api")
 BOT_API_KEY = os.getenv("BOT_API_KEY")
 
 # Default templates based on existing embed styles
@@ -144,7 +144,7 @@ async def migrate():
 
             try:
                 async with session.post(
-                    f"{API_BASE_URL}/api/embed-templates",
+                    f"{API_BASE_URL}/embed-templates",
                     json=template_copy,
                     headers={"X-Bot-API-Key": BOT_API_KEY}
                 ) as resp:
@@ -172,7 +172,7 @@ async def migrate():
 
             try:
                 async with session.post(
-                    f"{API_BASE_URL}/api/command-template-mappings",
+                    f"{API_BASE_URL}/command-template-mappings",
                     json={
                         "commandName": mapping['commandName'],
                         "templateId": template_id,
