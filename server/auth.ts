@@ -29,9 +29,22 @@ declare global {
 // Environment variables for Discord OAuth
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-const DISCORD_CALLBACK_URL = process.env.DISCORD_CALLBACK_URL || "/api/auth/discord/callback";
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;
 const REQUIRED_ROLE_ID = process.env.REQUIRED_ROLE_ID || "1452267489970094211";
+
+// Public URL for external services
+const rawPublic = (process.env.PUBLIC_URL || 
+                  (process.env.REPL_SLUG && process.env.REPL_OWNER ? 
+                   `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co` : 
+                   "http://localhost:5000")).replace(/\/$/, "");
+
+const ROOT_URL = rawPublic.endsWith("/api") ? rawPublic.slice(0, -4) : rawPublic;
+const API_BASE = rawPublic.endsWith("/api") ? rawPublic : `${rawPublic}/api`;
+
+let DISCORD_CALLBACK_URL = process.env.DISCORD_CALLBACK_URL || "/api/auth/discord/callback";
+if (DISCORD_CALLBACK_URL.startsWith("/")) {
+  DISCORD_CALLBACK_URL = `${ROOT_URL}${DISCORD_CALLBACK_URL}`;
+}
 
 // Session secret must be set in production
 const SESSION_SECRET = process.env.SESSION_SECRET;

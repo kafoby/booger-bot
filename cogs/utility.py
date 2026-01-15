@@ -100,7 +100,7 @@ class Utility(commands.Cog):
         )
         embed.add_field(
             name="Links",
-            value=f"[Bot Dashboard]({config.API_BASE_URL.replace('/api', '')}) | [UptimeBot](https://stats.uptimerobot.com/6neDK1LPEd/)",
+            value=f"[Bot Dashboard]({config.PUBLIC_BASE_URL}) | [UptimeBot](https://stats.uptimerobot.com/6neDK1LPEd/)",
             inline=False
         )
         embed.set_footer(text="Made with love ❤️")

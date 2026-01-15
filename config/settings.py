@@ -30,8 +30,23 @@ class ConfigManager:
         self.SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
         self.SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 
-        # API Configuration
+        # API Configuration (Internal)
         self.API_BASE_URL = os.getenv('API_URL', 'http://localhost:5000/api')
+        
+        # Public URL Configuration
+        repl_slug = os.getenv('REPL_SLUG')
+        repl_owner = os.getenv('REPL_OWNER')
+        default_public = f"https://{repl_slug}.{repl_owner}.repl.co" if repl_slug and repl_owner else "http://localhost:5000"
+        
+        raw_public = os.getenv('PUBLIC_URL', default_public).rstrip('/')
+        
+        # Handle cases where user might provide the /api suffix or not
+        if raw_public.endswith('/api'):
+            self.PUBLIC_API_URL = raw_public
+            self.PUBLIC_BASE_URL = raw_public[:-4]
+        else:
+            self.PUBLIC_BASE_URL = raw_public
+            self.PUBLIC_API_URL = f"{raw_public}/api"
 
         # Dynamic Config
         self.prefix = DEFAULT_PREFIX
