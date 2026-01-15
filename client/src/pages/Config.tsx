@@ -43,7 +43,6 @@ const AVAILABLE_COMMANDS = [
   { name: "pet", description: "Pet a user", prefix: "," },
   { name: "diddle", description: "Diddle command", prefix: "," },
   { name: "timeout", description: "Timeout a user", prefix: "," },
-  { name: "fmset", description: "Set Last.fm username", prefix: "," },
   { name: "fm", description: "Show now playing", prefix: "," },
   { name: "quote", description: "Quote a message", prefix: "," },
   { name: "youtube", description: "Share YouTube video", prefix: "/" },
