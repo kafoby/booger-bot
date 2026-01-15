@@ -2,7 +2,7 @@ from discord.ext import commands, tasks
 import discord
 import time
 from config.settings import config
-from config.constants import HEARTBEAT_URL, CONFIG_URL, TESTING_CHANNEL_ID
+from config.constants import TESTING_CHANNEL_ID
 from utils.logging import BotLogger
 from utils.formatters import Formatters
 from services.api_client import APIClient
@@ -39,7 +39,7 @@ class Events(commands.Cog):
             # Use APIClient
             # Note: APIClient expects response to be JSON or text. 
             # Heartbeat returns 200.
-            await APIClient.post(HEARTBEAT_URL, json=payload, headers=config.get_api_headers())
+            await APIClient.post(config.HEARTBEAT_URL, json=payload, headers=config.get_api_headers())
         except Exception as e:
             print(f"Heartbeat error: {e}")
 
@@ -50,7 +50,7 @@ class Events(commands.Cog):
     @tasks.loop(minutes=5)
     async def fetch_config(self):
         try:
-            data = await APIClient.get(CONFIG_URL, headers=config.get_api_headers())
+            data = await APIClient.get(config.CONFIG_URL, headers=config.get_api_headers())
             if isinstance(data, dict):
                 config.update_config(data)
                 print(f"Config updated: prefix={config.prefix}, disabled={config.disabled_commands}")

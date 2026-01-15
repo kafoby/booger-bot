@@ -54,6 +54,13 @@ class ConfigManager:
             self.PUBLIC_BASE_URL = raw_public
             self.PUBLIC_API_URL = f"{raw_public}/api"
 
+        # Derived API URLs
+        self.LOGS_URL = f"{self.API_BASE_URL}/logs"
+        self.WARNS_URL = f"{self.API_BASE_URL}/warns"
+        self.LFM_URL = f"{self.API_BASE_URL}/lfm"
+        self.HEARTBEAT_URL = f"{self.API_BASE_URL}/bot/heartbeat"
+        self.CONFIG_URL = f"{self.API_BASE_URL}/bot/config"
+
         # Dynamic Config
         self.prefix = DEFAULT_PREFIX
         self.disabled_commands: List[str] = []

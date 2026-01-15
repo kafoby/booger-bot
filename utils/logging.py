@@ -1,6 +1,5 @@
 import aiohttp
 import sys
-from config.constants import LOGS_URL
 from config.settings import config
 
 class BotLogger:
@@ -28,7 +27,7 @@ class BotLogger:
                     "category": category
                 }
                 async with session.post(
-                    LOGS_URL,
+                    config.LOGS_URL,
                     json=payload,
                     headers=config.get_api_headers()
                 ) as response:

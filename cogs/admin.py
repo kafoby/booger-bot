@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 from datetime import timedelta
 from config.settings import config
-from config.constants import WARNS_URL
 from utils.logging import BotLogger
 from utils.permissions import PermissionChecker
 from utils.embed_builder import EmbedBuilder
@@ -124,7 +123,7 @@ class Admin(commands.Cog):
                 "reason": reason
             }
 
-            response = await APIClient.post(WARNS_URL, json=payload, headers=config.get_api_headers())
+            response = await APIClient.post(config.WARNS_URL, json=payload, headers=config.get_api_headers())
 
             if response.get("_status") == 201 or "userId" in response:
                 await ctx.send(f'{target_user.mention} has been warned for: {reason}')
@@ -144,7 +143,7 @@ class Admin(commands.Cog):
     async def warns(self, ctx):
         """List all warnings or warnings for a specific user"""
         try:
-            warns = await APIClient.get(WARNS_URL, headers=config.get_api_headers())
+            warns = await APIClient.get(config.WARNS_URL, headers=config.get_api_headers())
 
             if ctx.message.mentions:
                 target_user = ctx.message.mentions[0]

@@ -1,13 +1,3 @@
-from config.settings import config
-
-# API Endpoints
-API_BASE_URL = config.API_BASE_URL
-LOGS_URL = f"{API_BASE_URL}/logs"
-WARNS_URL = f"{API_BASE_URL}/warns"
-LFM_URL = f"{API_BASE_URL}/lfm"
-HEARTBEAT_URL = f"{API_BASE_URL}/bot/heartbeat"
-CONFIG_URL = f"{API_BASE_URL}/bot/config"
-
 # Lavalink
 LAVALINK_URI = "https://lavalink-2026-production-bd9b.up.railway.app"
 
