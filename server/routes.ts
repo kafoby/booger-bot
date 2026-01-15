@@ -86,6 +86,7 @@ const requireAdmin: RequestHandler = async (req, res, next) => {
 // Helper function to generate Last.fm API signature
 function generateLastfmSignature(params: Record<string, string>): string {
   const sorted = Object.keys(params)
+    .filter(key => key !== "format" && key !== "callback")
     .sort()
     .map((key) => `${key}${params[key]}`)
     .join("");
