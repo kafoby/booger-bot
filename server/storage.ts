@@ -1,9 +1,10 @@
 import { db } from "./db";
 import {
-  logs, warns, lfmConnections, users, botStatus, botConfig, adminUsers, authBypassUsers, searchPresets,
+  logs, warns, lfmConnections, scrobbleHistory, users, botStatus, botConfig, adminUsers, authBypassUsers, searchPresets,
   embedTemplates, commandTemplateMappings, starboardConfig, autoreactConfig,
   type InsertLog, type Log, type InsertWarn, type Warn,
-  type InsertLfmConnection, type LfmConnection, type User, type InsertUser,
+  type InsertLfmConnection, type LfmConnection, type InsertScrobbleHistory, type ScrobbleHistory,
+  type User, type InsertUser,
   type BotStatus, type BotConfig, type AdminUser, type AuthBypassUser,
   type SearchPreset, type InsertSearchPreset,
   type EmbedTemplate, type InsertEmbedTemplate,
@@ -77,6 +78,11 @@ export interface IStorage {
   createWarn(warn: InsertWarn): Promise<Warn>;
   getLfmConnection(discordUserId: string): Promise<LfmConnection | undefined>;
   createOrUpdateLfmConnection(connection: InsertLfmConnection): Promise<LfmConnection>;
+  toggleLfmScrobbling(discordUserId: string): Promise<LfmConnection>;
+  deleteLfmConnection(discordUserId: string): Promise<void>;
+  createScrobbleRecord(data: InsertScrobbleHistory): Promise<ScrobbleHistory>;
+  getScrobbleHistory(discordUserId: string, filters: { limit?: number; offset?: number; startDate?: string; endDate?: string }): Promise<ScrobbleHistory[]>;
+  getScrobbleStats(discordUserId: string): Promise<{ total: number; failed: number }>;
   getUserByDiscordId(discordId: string): Promise<User | undefined>;
   getUserById(id: number): Promise<User | undefined>;
   createOrUpdateUser(user: InsertUser): Promise<User>;
@@ -309,6 +315,67 @@ export class DatabaseStorage implements IStorage {
     }
     const [created] = await db.insert(lfmConnections).values(connection).returning();
     return created;
+  }
+
+  async toggleLfmScrobbling(discordUserId: string): Promise<LfmConnection> {
+    const connection = await this.getLfmConnection(discordUserId);
+    if (!connection) {
+      throw new Error("Last.fm connection not found");
+    }
+    const [updated] = await db
+      .update(lfmConnections)
+      .set({ scrobblingEnabled: !connection.scrobblingEnabled })
+      .where(eq(lfmConnections.discordUserId, discordUserId))
+      .returning();
+    return updated;
+  }
+
+  async deleteLfmConnection(discordUserId: string): Promise<void> {
+    await db.delete(lfmConnections).where(eq(lfmConnections.discordUserId, discordUserId));
+  }
+
+  async createScrobbleRecord(data: InsertScrobbleHistory): Promise<ScrobbleHistory> {
+    const [created] = await db.insert(scrobbleHistory).values(data).returning();
+    return created;
+  }
+
+  async getScrobbleHistory(
+    discordUserId: string,
+    filters: { limit?: number; offset?: number; startDate?: string; endDate?: string }
+  ): Promise<ScrobbleHistory[]> {
+    const { limit = 50, offset = 0, startDate, endDate } = filters;
+    const conditions = [eq(scrobbleHistory.discordUserId, discordUserId)];
+
+    if (startDate) {
+      conditions.push(sql`${scrobbleHistory.timestamp} >= ${startDate}::timestamp`);
+    }
+
+    if (endDate) {
+      conditions.push(sql`${scrobbleHistory.timestamp} <= ${endDate}::timestamp`);
+    }
+
+    return await db
+      .select()
+      .from(scrobbleHistory)
+      .where(sql`${sql.join(conditions, sql` AND `)}`)
+      .orderBy(desc(scrobbleHistory.timestamp))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getScrobbleStats(discordUserId: string): Promise<{ total: number; failed: number }> {
+    const [stats] = await db
+      .select({
+        total: count(),
+        failed: sql<number>`COUNT(CASE WHEN ${scrobbleHistory.success} = false THEN 1 END)`,
+      })
+      .from(scrobbleHistory)
+      .where(eq(scrobbleHistory.discordUserId, discordUserId));
+
+    return {
+      total: Number(stats?.total || 0),
+      failed: Number(stats?.failed || 0),
+    };
   }
 
   async getUserByDiscordId(discordId: string): Promise<User | undefined> {

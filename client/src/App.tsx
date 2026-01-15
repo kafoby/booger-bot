@@ -13,6 +13,7 @@ import Users from "@/pages/Users";
 import EmbedBuilder from "@/pages/EmbedBuilder";
 import Starboard from "@/pages/Starboard";
 import AutoReact from "@/pages/AutoReact";
+import LastFm from "@/pages/LastFm";
 import NotFound from "@/pages/not-found";
 
 // Removed FloatingParticles - too AI-generic and mechanical
@@ -87,6 +88,9 @@ function Router() {
       </Route>
       <Route path="/autoreact">
         <ProtectedRoute component={AutoReact} />
+      </Route>
+      <Route path="/lastfm">
+        <ProtectedRoute component={LastFm} />
       </Route>
       <Route path="/">
         <ProtectedRoute component={Dashboard} />

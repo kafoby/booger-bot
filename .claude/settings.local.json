@@ -22,7 +22,11 @@
       "Bash(pkg-config:*)",
       "Bash(ldconfig:*)",
       "Bash(ls:*)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(npm run db:generate:*)",
+      "Bash(npm run)",
+      "Bash(sqlite3:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }

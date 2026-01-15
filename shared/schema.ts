@@ -44,7 +44,21 @@ export const lfmConnections = pgTable("lfm_connections", {
   id: serial("id").primaryKey(),
   discordUserId: text("discord_user_id").notNull().unique(),
   lastfmUsername: text("lastfm_username").notNull(),
+  sessionKey: text("session_key").notNull(),
+  scrobblingEnabled: boolean("scrobbling_enabled").default(true),
   timestamp: timestamp("timestamp").defaultNow(),
+});
+
+export const scrobbleHistory = pgTable("scrobble_history", {
+  id: serial("id").primaryKey(),
+  discordUserId: text("discord_user_id").notNull(),
+  artist: text("artist").notNull(),
+  track: text("track").notNull(),
+  album: text("album"),
+  timestamp: timestamp("timestamp").notNull(),
+  scrobbledAt: timestamp("scrobbled_at").defaultNow(),
+  success: boolean("success").default(true),
+  errorMessage: text("error_message"),
 });
 
 // Bot status for heartbeat tracking
@@ -97,6 +111,7 @@ export const searchPresets = pgTable("search_presets", {
 export const insertLogSchema = createInsertSchema(logs).omit({ id: true, timestamp: true });
 export const insertWarnSchema = createInsertSchema(warns).omit({ id: true, timestamp: true });
 export const insertLfmSchema = createInsertSchema(lfmConnections).omit({ id: true, timestamp: true });
+export const insertScrobbleHistorySchema = createInsertSchema(scrobbleHistory).omit({ id: true, scrobbledAt: true });
 export const insertBotStatusSchema = createInsertSchema(botStatus).omit({ id: true, updatedAt: true });
 export const insertBotConfigSchema = createInsertSchema(botConfig).omit({ id: true, updatedAt: true });
 export const insertAdminUserSchema = createInsertSchema(adminUsers).omit({ id: true, addedAt: true });
@@ -109,6 +124,8 @@ export type Warn = typeof warns.$inferSelect;
 export type InsertWarn = z.infer<typeof insertWarnSchema>;
 export type LfmConnection = typeof lfmConnections.$inferSelect;
 export type InsertLfmConnection = z.infer<typeof insertLfmSchema>;
+export type ScrobbleHistory = typeof scrobbleHistory.$inferSelect;
+export type InsertScrobbleHistory = z.infer<typeof insertScrobbleHistorySchema>;
 export type BotStatus = typeof botStatus.$inferSelect;
 export type InsertBotStatus = z.infer<typeof insertBotStatusSchema>;
 export type BotConfig = typeof botConfig.$inferSelect;

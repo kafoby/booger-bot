@@ -23,6 +23,7 @@ class ConfigManager:
         self.GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
         self.GOOGLE_CSE_ID = os.getenv('GOOGLE_CSE_ID')
         self.LASTFM_API_KEY = os.getenv('LASTFM_API_KEY')
+        self.LASTFM_API_SECRET = os.getenv('LASTFM_API_SECRET')
         self.BOT_API_KEY = os.getenv('BOT_API_KEY')
         self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
         self.GROK_API_KEY = os.getenv('GROK_API_KEY')

@@ -9,6 +9,8 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import urllib.parse
 import os
 import yt_dlp
+import time
+from datetime import datetime
 from config.settings import config
 from config.constants import LAVALINK_URI
 from utils.logging import BotLogger
@@ -146,6 +148,9 @@ class Music(commands.Cog):
         self.guild_queues = {}  # {guild_id: [tracks]}
         self.loop_mode = {}  # {guild_id: "off"|"one"|"all"}
         self.now_playing_messages = {}  # {guild_id: (channel_id, message_id)}
+        self.scrobble_tasks = {}  # {guild_id: asyncio.Task}
+        self.track_listeners = {}  # {guild_id: {user_id: start_time}}
+        self.api_base = "http://localhost:3000/api"
 
     async def cog_load(self):
         """Called when the cog is loaded. Set up Lavalink connection."""
@@ -160,6 +165,116 @@ class Music(commands.Cog):
         except Exception as e:
             print(f"[Music] Failed to connect to Lavalink: {e}")
 
+    async def _api_request(self, method: str, endpoint: str, json_data: dict = None) -> tuple[bool, any]:
+        """Make API request to the backend"""
+        try:
+            headers = config.get_api_headers()
+            url = f"{self.api_base}{endpoint}"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.request(method, url, headers=headers, json=json_data) as response:
+                    if response.status in [200, 201]:
+                        data = await response.json()
+                        return True, data
+                    else:
+                        return False, await response.text()
+        except Exception as e:
+            print(f"[Music] API request error: {e}")
+            return False, str(e)
+
+    async def _get_voice_channel_users(self, guild: discord.Guild) -> list[int]:
+        """Get list of user IDs in the bot's voice channel (excluding bots)"""
+        player: wavelink.Player = guild.voice_client
+        if not player or not player.channel:
+            return []
+
+        return [member.id for member in player.channel.members if not member.bot]
+
+    async def _update_now_playing_for_users(self, guild_id: int, track: wavelink.Playable):
+        """Update Now Playing status on Last.fm for all users in voice channel"""
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return
+
+        user_ids = await self._get_voice_channel_users(guild)
+        if not user_ids:
+            return
+
+        # Prepare data for API
+        now_playing_data = {
+            "nowPlaying": [
+                {
+                    "discordUserId": str(user_id),
+                    "artist": track.author or "Unknown Artist",
+                    "track": track.title,
+                    "album": None,  # Not available from wavelink
+                    "duration": track.length // 1000 if track.length else None  # Convert ms to seconds
+                }
+                for user_id in user_ids
+            ]
+        }
+
+        success, result = await self._api_request("POST", "/lfm/now-playing", now_playing_data)
+        if success:
+            print(f"[Music] Updated Now Playing for {len(user_ids)} users")
+        else:
+            print(f"[Music] Failed to update Now Playing: {result}")
+
+    async def _schedule_scrobble(self, guild_id: int, track: wavelink.Playable, start_time: float):
+        """Schedule scrobbling after 30 seconds or 50% duration"""
+        # Calculate scrobble threshold
+        duration_ms = track.length if track.length else 60000  # Default 60s if unknown
+        duration_seconds = duration_ms / 1000
+        threshold = min(30, duration_seconds * 0.5)  # 30 seconds OR 50% duration
+
+        print(f"[Music] Scheduling scrobble for '{track.title}' in {threshold}s")
+
+        try:
+            await asyncio.sleep(threshold)
+
+            # Get users who are still in voice channel
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return
+
+            current_users = set(await self._get_voice_channel_users(guild))
+            initial_users = set(self.track_listeners.get(guild_id, {}).keys())
+
+            # Only scrobble for users who were there at start AND are still there
+            users_to_scrobble = current_users.intersection(initial_users)
+
+            if not users_to_scrobble:
+                print(f"[Music] No users to scrobble for '{track.title}'")
+                return
+
+            # Prepare scrobble data
+            timestamp = int(start_time * 1000)  # Convert to milliseconds
+            scrobble_data = {
+                "scrobbles": [
+                    {
+                        "discordUserId": str(user_id),
+                        "artist": track.author or "Unknown Artist",
+                        "track": track.title,
+                        "album": None,
+                        "timestamp": timestamp,
+                        "duration": int(duration_seconds)
+                    }
+                    for user_id in users_to_scrobble
+                ]
+            }
+
+            success, result = await self._api_request("POST", "/lfm/scrobble", scrobble_data)
+            if success:
+                successful = sum(1 for r in result.get("results", []) if r.get("success"))
+                print(f"[Music] Scrobbled '{track.title}' for {successful}/{len(users_to_scrobble)} users")
+            else:
+                print(f"[Music] Failed to scrobble: {result}")
+
+        except asyncio.CancelledError:
+            print(f"[Music] Scrobble task cancelled for '{track.title}'")
+        except Exception as e:
+            print(f"[Music] Error in scrobble task: {e}")
+
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
         print(f"[Music] Wavelink node ready: {payload.node.identifier}")
@@ -168,12 +283,38 @@ class Music(commands.Cog):
     async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
         print(f"[Music] Track started: {payload.track.title} (duration: {payload.track.length}ms)")
 
+        guild_id = payload.player.guild.id
+        start_time = time.time()
+
+        # Cancel any existing scrobble task for this guild
+        if guild_id in self.scrobble_tasks:
+            self.scrobble_tasks[guild_id].cancel()
+
+        # Track users currently in voice channel
+        guild = self.bot.get_guild(guild_id)
+        if guild:
+            user_ids = await self._get_voice_channel_users(guild)
+            self.track_listeners[guild_id] = {user_id: start_time for user_id in user_ids}
+
+            # Update Now Playing on Last.fm
+            await self._update_now_playing_for_users(guild_id, payload.track)
+
+            # Schedule scrobble
+            task = asyncio.create_task(
+                self._schedule_scrobble(guild_id, payload.track, start_time)
+            )
+            self.scrobble_tasks[guild_id] = task
+
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
         print(f"[Music] Track ended: {payload.track.title} (reason: {payload.reason})")
 
-        # Auto-play next track from queue
+        # Clean up scrobble tracking
         guild_id = payload.player.guild.id
+        if guild_id in self.track_listeners:
+            del self.track_listeners[guild_id]
+
+        # Auto-play next track from queue
         queue = self.guild_queues.get(guild_id, [])
         loop_mode = self.loop_mode.get(guild_id, "off")
 

@@ -4,11 +4,20 @@ import passport from "passport";
 import { storage } from "./storage";
 import { setupAuth, requireAuth, isAuthenticated, isDiscordConfigured } from "./auth";
 import { api } from "@shared/routes";
-import { insertWarnSchema, insertLfmSchema } from "@shared/schema";
+import { insertWarnSchema, insertLfmSchema, insertScrobbleHistorySchema } from "@shared/schema";
 import { z } from "zod";
+import crypto from "crypto";
 
 // Bot API key for authenticating requests from the Discord bot
 const BOT_API_KEY = process.env.BOT_API_KEY;
+
+// Last.fm API credentials
+const LASTFM_API_KEY = process.env.LASTFM_API_KEY;
+const LASTFM_API_SECRET = process.env.LASTFM_API_SECRET;
+const LASTFM_CALLBACK_URL = process.env.LASTFM_CALLBACK_URL || "https://booger.bot/lastfm-callback";
+
+// Temporary storage for auth tokens (in production, use Redis or database)
+const authTokens = new Map<string, { discordUserId: string; expiresAt: number }>();
 
 // Middleware to validate bot API key
 const requireBotApiKey: RequestHandler = (req, res, next) => {
@@ -63,6 +72,38 @@ const requireAdmin: RequestHandler = async (req, res, next) => {
   }
   return next();
 };
+
+// Helper function to generate Last.fm API signature
+function generateLastfmSignature(params: Record<string, string>): string {
+  const sorted = Object.keys(params)
+    .sort()
+    .map((key) => `${key}${params[key]}`)
+    .join("");
+  return crypto
+    .createHash("md5")
+    .update(sorted + LASTFM_API_SECRET)
+    .digest("hex");
+}
+
+// Helper function to call Last.fm API
+async function callLastfmApi(method: string, params: Record<string, string>): Promise<any> {
+  const apiParams = {
+    method,
+    api_key: LASTFM_API_KEY!,
+    format: "json",
+    ...params,
+  };
+
+  apiParams.api_sig = generateLastfmSignature(apiParams);
+
+  const url = new URL("https://ws.audioscrobbler.com/2.0/");
+  Object.entries(apiParams).forEach(([key, value]) => {
+    url.searchParams.append(key, value);
+  });
+
+  const response = await fetch(url.toString(), { method: "POST" });
+  return response.json();
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -288,7 +329,121 @@ export async function registerRoutes(
     }
   });
 
-  // LFM routes are used by the Discord bot - protected by API key
+  // ============================================
+  // LAST.FM ROUTES
+  // ============================================
+
+  // Start Last.fm authentication
+  app.get("/api/lfm/auth/start", requireBotApiKeyOrAuth, async (req, res) => {
+    try {
+      const discordUserId = req.query.discordUserId as string;
+      if (!discordUserId) {
+        return res.status(400).json({ message: "discordUserId is required" });
+      }
+
+      if (!LASTFM_API_KEY) {
+        return res.status(500).json({ message: "Last.fm API not configured" });
+      }
+
+      // Generate unique auth token
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = Date.now() + 60 * 60 * 1000; // 60 minutes
+
+      // Store token with user ID
+      authTokens.set(token, { discordUserId, expiresAt });
+
+      // Clean up expired tokens
+      for (const [key, value] of authTokens.entries()) {
+        if (value.expiresAt < Date.now()) {
+          authTokens.delete(key);
+        }
+      }
+
+      // Return Last.fm auth URL
+      const authUrl = `https://www.last.fm/api/auth?api_key=${LASTFM_API_KEY}&cb=${encodeURIComponent(
+        `${LASTFM_CALLBACK_URL}?token=${token}`
+      )}`;
+
+      res.json({
+        authUrl,
+        token,
+        expiresIn: 3600,
+      });
+    } catch (err) {
+      console.error("Error starting Last.fm auth:", err);
+      res.status(500).json({ message: "Failed to start authentication" });
+    }
+  });
+
+  // Last.fm authentication callback
+  app.get("/api/lfm/auth/callback", async (req, res) => {
+    try {
+      const token = req.query.token as string;
+      const lfmToken = req.query.token as string; // Last.fm sends back 'token' parameter
+
+      if (!token) {
+        return res.status(400).send("Missing token parameter");
+      }
+
+      // Get stored auth data
+      const authData = authTokens.get(token);
+      if (!authData || authData.expiresAt < Date.now()) {
+        authTokens.delete(token);
+        return res.status(400).send("Invalid or expired token");
+      }
+
+      if (!LASTFM_API_KEY || !LASTFM_API_SECRET) {
+        return res.status(500).send("Last.fm API not configured");
+      }
+
+      // Get session key from Last.fm
+      const sessionData = await callLastfmApi("auth.getSession", { token: lfmToken });
+
+      if (sessionData.error) {
+        console.error("Last.fm auth error:", sessionData);
+        return res.status(400).send(`Last.fm authentication failed: ${sessionData.message}`);
+      }
+
+      const sessionKey = sessionData.session.key;
+      const username = sessionData.session.name;
+
+      // Store in database
+      await storage.createOrUpdateLfmConnection({
+        discordUserId: authData.discordUserId,
+        lastfmUsername: username,
+        sessionKey,
+        scrobblingEnabled: true,
+      });
+
+      // Clean up token
+      authTokens.delete(token);
+
+      // Redirect to success page
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Last.fm Connected</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            h1 { color: #d51007; }
+            p { font-size: 18px; }
+          </style>
+        </head>
+        <body>
+          <h1>Success!</h1>
+          <p>Your Last.fm account <strong>${username}</strong> has been connected.</p>
+          <p>You can close this window and return to Discord.</p>
+        </body>
+        </html>
+      `);
+    } catch (err) {
+      console.error("Error in Last.fm callback:", err);
+      res.status(500).send("Authentication failed. Please try again.");
+    }
+  });
+
+  // Get Last.fm connection for user
   app.get("/api/lfm/:discordUserId", requireBotApiKey, async (req, res) => {
     try {
       const connection = await storage.getLfmConnection(req.params.discordUserId);
@@ -301,19 +456,192 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/lfm", requireBotApiKey, async (req, res) => {
+  // Toggle scrobbling for user
+  app.put("/api/lfm/:discordUserId/toggle", requireBotApiKey, async (req, res) => {
     try {
-      const input = insertLfmSchema.parse(req.body);
-      const connection = await storage.createOrUpdateLfmConnection(input);
-      res.status(201).json(connection);
+      const connection = await storage.toggleLfmScrobbling(req.params.discordUserId);
+      res.json(connection);
     } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({
-          message: err.errors[0].message,
-          field: err.errors[0].path.join("."),
-        });
+      res.status(500).json({ message: "Error toggling scrobbling" });
+    }
+  });
+
+  // Delete Last.fm connection
+  app.delete("/api/lfm/:discordUserId", requireBotApiKey, async (req, res) => {
+    try {
+      await storage.deleteLfmConnection(req.params.discordUserId);
+      res.json({ message: "Last.fm connection deleted" });
+    } catch (err) {
+      res.status(500).json({ message: "Error deleting Last.fm connection" });
+    }
+  });
+
+  // Get scrobble history
+  app.get("/api/lfm/scrobbles/:discordUserId", requireAuth, async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 1000);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+
+      const [history, stats] = await Promise.all([
+        storage.getScrobbleHistory(req.params.discordUserId, { limit, offset, startDate, endDate }),
+        storage.getScrobbleStats(req.params.discordUserId),
+      ]);
+
+      res.json({
+        history,
+        stats,
+        limit,
+        offset,
+      });
+    } catch (err) {
+      console.error("Error fetching scrobble history:", err);
+      res.status(500).json({ message: "Error fetching scrobble history" });
+    }
+  });
+
+  // Batch scrobble endpoint
+  app.post("/api/lfm/scrobble", requireBotApiKey, async (req, res) => {
+    try {
+      const scrobbles = req.body.scrobbles as Array<{
+        discordUserId: string;
+        artist: string;
+        track: string;
+        album?: string;
+        timestamp: number;
+        duration?: number;
+      }>;
+
+      if (!Array.isArray(scrobbles) || scrobbles.length === 0) {
+        return res.status(400).json({ message: "scrobbles array is required" });
       }
-      throw err;
+
+      const results = [];
+
+      for (const scrobble of scrobbles) {
+        try {
+          // Get user's Last.fm connection
+          const connection = await storage.getLfmConnection(scrobble.discordUserId);
+
+          if (!connection || !connection.sessionKey || !connection.scrobblingEnabled) {
+            results.push({
+              discordUserId: scrobble.discordUserId,
+              success: false,
+              error: "User not connected or scrobbling disabled",
+            });
+            continue;
+          }
+
+          // Call Last.fm API to scrobble
+          const params: Record<string, string> = {
+            sk: connection.sessionKey,
+            artist: scrobble.artist,
+            track: scrobble.track,
+            timestamp: Math.floor(scrobble.timestamp / 1000).toString(),
+          };
+
+          if (scrobble.album) params.album = scrobble.album;
+          if (scrobble.duration) params.duration = scrobble.duration.toString();
+
+          const response = await callLastfmApi("track.scrobble", params);
+
+          const success = !response.error;
+          const errorMessage = response.error ? response.message : undefined;
+
+          // Store in history
+          await storage.createScrobbleRecord({
+            discordUserId: scrobble.discordUserId,
+            artist: scrobble.artist,
+            track: scrobble.track,
+            album: scrobble.album || null,
+            timestamp: new Date(scrobble.timestamp),
+            success,
+            errorMessage: errorMessage || null,
+          });
+
+          results.push({
+            discordUserId: scrobble.discordUserId,
+            success,
+            error: errorMessage,
+          });
+        } catch (err) {
+          console.error(`Error scrobbling for user ${scrobble.discordUserId}:`, err);
+          results.push({
+            discordUserId: scrobble.discordUserId,
+            success: false,
+            error: "Internal error",
+          });
+        }
+      }
+
+      res.json({ results });
+    } catch (err) {
+      console.error("Error in batch scrobble:", err);
+      res.status(500).json({ message: "Error processing scrobbles" });
+    }
+  });
+
+  // Update Now Playing
+  app.post("/api/lfm/now-playing", requireBotApiKey, async (req, res) => {
+    try {
+      const nowPlaying = req.body.nowPlaying as Array<{
+        discordUserId: string;
+        artist: string;
+        track: string;
+        album?: string;
+        duration?: number;
+      }>;
+
+      if (!Array.isArray(nowPlaying) || nowPlaying.length === 0) {
+        return res.status(400).json({ message: "nowPlaying array is required" });
+      }
+
+      const results = [];
+
+      for (const np of nowPlaying) {
+        try {
+          const connection = await storage.getLfmConnection(np.discordUserId);
+
+          if (!connection || !connection.sessionKey || !connection.scrobblingEnabled) {
+            results.push({
+              discordUserId: np.discordUserId,
+              success: false,
+              error: "User not connected or scrobbling disabled",
+            });
+            continue;
+          }
+
+          const params: Record<string, string> = {
+            sk: connection.sessionKey,
+            artist: np.artist,
+            track: np.track,
+          };
+
+          if (np.album) params.album = np.album;
+          if (np.duration) params.duration = np.duration.toString();
+
+          const response = await callLastfmApi("track.updateNowPlaying", params);
+
+          results.push({
+            discordUserId: np.discordUserId,
+            success: !response.error,
+            error: response.error ? response.message : undefined,
+          });
+        } catch (err) {
+          console.error(`Error updating now playing for user ${np.discordUserId}:`, err);
+          results.push({
+            discordUserId: np.discordUserId,
+            success: false,
+            error: "Internal error",
+          });
+        }
+      }
+
+      res.json({ results });
+    } catch (err) {
+      console.error("Error in now playing update:", err);
+      res.status(500).json({ message: "Error updating now playing" });
     }
   });
 
