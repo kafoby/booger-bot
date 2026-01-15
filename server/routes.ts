@@ -371,7 +371,7 @@ export async function registerRoutes(
 
       // Return Last.fm auth URL
       const authUrl = `https://www.last.fm/api/auth?api_key=${LASTFM_API_KEY}&cb=${encodeURIComponent(
-        `${LASTFM_CALLBACK_URL}?token=${token}`
+        `${LASTFM_CALLBACK_URL}?state=${token}`
       )}`;
 
       res.json({
@@ -388,7 +388,7 @@ export async function registerRoutes(
   // Last.fm authentication callback
   app.get("/api/lfm/auth/callback", async (req, res) => {
     try {
-      const token = req.query.token as string;
+      const token = req.query.state as string; // Our internal token (passed as state)
       const lfmToken = req.query.token as string; // Last.fm sends back 'token' parameter
 
       if (!token) {
