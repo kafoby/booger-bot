@@ -16,7 +16,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-API_BASE_URL = os.getenv("API_URL", "http://localhost:5000/api")
+raw_api = os.getenv("API_URL", "http://localhost:5000/api").rstrip('/')
+API_BASE_URL = raw_api if raw_api.endswith('/api') else f"{raw_api}/api"
 BOT_API_KEY = os.getenv("BOT_API_KEY")
 
 # Default templates based on existing embed styles

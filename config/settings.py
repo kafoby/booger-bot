@@ -31,7 +31,13 @@ class ConfigManager:
         self.SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 
         # API Configuration (Internal)
-        self.API_BASE_URL = os.getenv('API_URL', 'http://localhost:5000/api')
+        raw_api = os.getenv('API_URL', 'http://localhost:5000/api').rstrip('/')
+        if raw_api.endswith('/api'):
+            self.API_BASE_URL = raw_api
+            self.API_ROOT_URL = raw_api[:-4]
+        else:
+            self.API_ROOT_URL = raw_api
+            self.API_BASE_URL = f"{raw_api}/api"
         
         # Public URL Configuration
         repl_slug = os.getenv('REPL_SLUG')
