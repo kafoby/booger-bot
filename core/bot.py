@@ -64,7 +64,6 @@ class DiscordBot(commands.Bot):
         if not PermissionChecker.is_in_allowed_channel(message.channel.id):
             # We don't log ignored messages to server to avoid spam? 
             # bot.py printed: "Ignored message in non-allowed channel: ..."
-            print(f"Ignored message in non-allowed channel: {message.content}")
             return
 
         # Check disabled commands (for prefix commands)
