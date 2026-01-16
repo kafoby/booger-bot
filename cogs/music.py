@@ -1,6 +1,6 @@
 import discord
 from discord import app_commands, ui
-from discord.ext import commands
+from discord.ext import commands, tasks
 import aiohttp
 import asyncio
 import wavelink
@@ -150,7 +150,12 @@ class Music(commands.Cog):
         self.now_playing_messages = {}  # {guild_id: (channel_id, message_id)}
         self.scrobble_tasks = {}  # {guild_id: asyncio.Task}
         self.track_listeners = {}  # {guild_id: {user_id: start_time}}
+        self.empty_channel_timers = {} # {guild_id: start_time}
         self.api_base = config.API_BASE_URL
+        self.auto_disconnect.start()
+
+    def cog_unload(self):
+        self.auto_disconnect.cancel()
 
     async def cog_load(self):
         """Called when the cog is loaded. Set up Lavalink connection."""
@@ -274,6 +279,46 @@ class Music(commands.Cog):
             print(f"[Music] Scrobble task cancelled for '{track.title}'")
         except Exception as e:
             print(f"[Music] Error in scrobble task: {e}")
+
+    @tasks.loop(seconds=5)
+    async def auto_disconnect(self):
+        """Check for empty voice channels and disconnect"""
+        for guild in self.bot.guilds:
+            player: wavelink.Player = guild.voice_client
+            if not player or not player.channel:
+                self.empty_channel_timers.pop(guild.id, None)
+                continue
+
+            # Check for non-bot members
+            members = [m for m in player.channel.members if not m.bot]
+            
+            if members:
+                # Channel is active, clear timer
+                self.empty_channel_timers.pop(guild.id, None)
+            else:
+                # Channel is empty
+                if guild.id not in self.empty_channel_timers:
+                    print(f"[Music] Channel empty in {guild.name}, starting 10s timer")
+                    self.empty_channel_timers[guild.id] = time.time()
+                
+                # Check if timer exceeded 10 seconds
+                elif time.time() - self.empty_channel_timers[guild.id] >= 10:
+                    print(f"[Music] Auto-disconnecting from {guild.name} due to inactivity")
+                    
+                    # Clear queue and state
+                    self.guild_queues[guild.id] = []
+                    if guild.id in self.now_playing_messages:
+                        del self.now_playing_messages[guild.id]
+                    self.empty_channel_timers.pop(guild.id, None)
+                    
+                    try:
+                        await player.disconnect()
+                    except Exception as e:
+                        print(f"[Music] Error disconnecting: {e}")
+
+    @auto_disconnect.before_loop
+    async def before_auto_disconnect(self):
+        await self.bot.wait_until_ready()
 
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
