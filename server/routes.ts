@@ -455,8 +455,15 @@ export async function registerRoutes(
   });
 
   // Get Last.fm connection for user
-  app.get("/api/lfm/:discordUserId", requireBotApiKey, async (req, res) => {
+  app.get("/api/lfm/:discordUserId", requireBotApiKeyOrAuth, async (req, res) => {
     try {
+      if (req.isAuthenticated()) {
+        const user = req.user as Express.User;
+        if (user.discordId !== req.params.discordUserId) {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+      }
+
       const connection = await storage.getLfmConnection(req.params.discordUserId);
       if (!connection) {
         return res.status(404).json({ message: "Last.fm connection not found" });
@@ -468,8 +475,15 @@ export async function registerRoutes(
   });
 
   // Toggle scrobbling for user
-  app.put("/api/lfm/:discordUserId/toggle", requireBotApiKey, async (req, res) => {
+  app.put("/api/lfm/:discordUserId/toggle", requireBotApiKeyOrAuth, async (req, res) => {
     try {
+      if (req.isAuthenticated()) {
+        const user = req.user as Express.User;
+        if (user.discordId !== req.params.discordUserId) {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+      }
+
       const connection = await storage.toggleLfmScrobbling(req.params.discordUserId);
       res.json(connection);
     } catch (err) {
@@ -478,8 +492,15 @@ export async function registerRoutes(
   });
 
   // Delete Last.fm connection
-  app.delete("/api/lfm/:discordUserId", requireBotApiKey, async (req, res) => {
+  app.delete("/api/lfm/:discordUserId", requireBotApiKeyOrAuth, async (req, res) => {
     try {
+      if (req.isAuthenticated()) {
+        const user = req.user as Express.User;
+        if (user.discordId !== req.params.discordUserId) {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+      }
+
       await storage.deleteLfmConnection(req.params.discordUserId);
       res.json({ message: "Last.fm connection deleted" });
     } catch (err) {
